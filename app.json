@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "NenemCosmeticos",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,13 +15,21 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.anonymous.frontend"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "extra": {
+      "eas": {
+        "projectId": "a74de704-50d1-4a0a-8347-846eb832141b"
+      }
+    },
+    "owner": "samuel_utfpr",
     "plugins": [
-      "@config-plugins/watermelondb"
+      "expo-sharing",
+      "expo-secure-store"
     ]
   }
 }

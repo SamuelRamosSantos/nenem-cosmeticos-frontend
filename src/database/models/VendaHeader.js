@@ -11,8 +11,9 @@ export default class VendaHeader extends Model {
   };
 
   @field('cliente_id') clienteId;
-  @field('status')     status;  // 'aberta' | 'finalizada' | 'cancelada'
+  @field('status')     status;     // 'aberta' | 'finalizada' | 'cancelada'
   @field('total')      total;
+  @date('data_venda')  dataVenda;  // data real da venda (permite retroativo)
 
   @readonly @date('created_at') createdAt;
   @date('updated_at')           updatedAt;

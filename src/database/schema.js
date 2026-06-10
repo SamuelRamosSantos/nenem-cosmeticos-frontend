@@ -14,7 +14,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // =============================================================================
 
 export default appSchema({
-  version: 1,
+  version: 6,
   tables: [
 
     // -------------------------------------------------------------------------
@@ -23,7 +23,7 @@ export default appSchema({
       columns: [
         { name: 'nome',     type: 'string' },
         { name: 'telefone', type: 'string', isOptional: true },
-        { name: 'tipo',     type: 'string' }, // 'cliente' | 'fornecedor'
+        { name: 'tipo',     type: 'string' }, // 'C' (Cliente) | 'F' (Fornecedor)
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],
@@ -33,10 +33,11 @@ export default appSchema({
     tableSchema({
       name: 'marcas',
       columns: [
-        { name: 'nome',                 type: 'string' },
-        { name: 'percentual_comissao',  type: 'number' },
-        { name: 'created_at', type: 'number' },
-        { name: 'updated_at', type: 'number' },
+        { name: 'nome',                type: 'string' },
+        { name: 'percentual_comissao', type: 'number' },
+        { name: 'ativo',              type: 'boolean' }, // soft delete
+        { name: 'created_at',         type: 'number' },
+        { name: 'updated_at',         type: 'number' },
       ],
     }),
 
@@ -55,13 +56,15 @@ export default appSchema({
       name: 'produtos',
       columns: [
         { name: 'descricao',      type: 'string' },
-        { name: 'marca_id',       type: 'string', isIndexed: true },
+        { name: 'marca_id',       type: 'string', isOptional: true, isIndexed: true },
         { name: 'preco_venda',    type: 'number' },
         { name: 'custo_preco',    type: 'number' },
         { name: 'cod_barras',     type: 'string', isOptional: true },
         { name: 'codigo_interno', type: 'string', isOptional: true },
-        { name: 'tipo_baixa',     type: 'string' }, // 'individual' | 'mestre'
+        { name: 'tipo_baixa',       type: 'string' },  // 'I' (Individual) | 'M' (Master/Kit)
         { name: 'qtd_estoque',    type: 'number' },
+        { name: 'movimenta_estoque', type: 'boolean' }, // default true
+        { name: 'ativo',          type: 'boolean' }, // soft delete
         { name: 'created_at',     type: 'number' },
         { name: 'updated_at',     type: 'number' },
       ],
@@ -98,11 +101,12 @@ export default appSchema({
     tableSchema({
       name: 'vendas',
       columns: [
-        { name: 'cliente_id', type: 'string', isOptional: true, isIndexed: true },
-        { name: 'status',     type: 'string' }, // 'aberta' | 'finalizada' | 'cancelada'
-        { name: 'total',      type: 'number' },
-        { name: 'created_at', type: 'number' },
-        { name: 'updated_at', type: 'number' },
+        { name: 'cliente_id',  type: 'string', isOptional: true, isIndexed: true },
+        { name: 'status',      type: 'string' }, // 'aberta' | 'finalizada' | 'cancelada'
+        { name: 'total',       type: 'number' },
+        { name: 'data_venda',  type: 'number' }, // Unix ms — permite lançamento retroativo
+        { name: 'created_at',  type: 'number' },
+        { name: 'updated_at',  type: 'number' },
       ],
     }),
 
@@ -154,6 +158,18 @@ export default appSchema({
         { name: 'custo_unitario',type: 'number' },
         { name: 'created_at',    type: 'number' },
         { name: 'updated_at',    type: 'number' },
+      ],
+    }),
+
+    // -------------------------------------------------------------------------
+    tableSchema({
+      name: 'usuarios',
+      columns: [
+        { name: 'nome',       type: 'string' },
+        { name: 'senha',      type: 'string' },
+        { name: 'ativo',      type: 'boolean' },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
       ],
     }),
 

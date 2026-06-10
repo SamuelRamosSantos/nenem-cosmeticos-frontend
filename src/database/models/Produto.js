@@ -18,8 +18,10 @@ export default class Produto extends Model {
   @field('custo_preco')    custoPreco;
   @field('cod_barras')     codBarras;
   @field('codigo_interno') codigoInterno;
-  @field('tipo_baixa')     tipoBaixa;  // 'individual' | 'mestre'
-  @field('qtd_estoque')    qtdEstoque;
+  @field('tipo_baixa')        tipoBaixa;       // 'I' | 'M'
+  @field('qtd_estoque')       qtdEstoque;
+  @field('movimenta_estoque') movimentaEstoque; // boolean, default true
+  @field('ativo')             ativo;            // false = inativado (soft delete)
 
   @readonly @date('created_at') createdAt;
   @date('updated_at')           updatedAt;

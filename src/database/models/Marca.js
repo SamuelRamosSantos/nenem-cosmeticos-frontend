@@ -10,6 +10,7 @@ export default class Marca extends Model {
 
   @field('nome')                nome;
   @field('percentual_comissao') percentualComissao;
+  @field('ativo')               ativo; // false = inativada (soft delete)
 
   @readonly @date('created_at') createdAt;
   @date('updated_at')           updatedAt;
