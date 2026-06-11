@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TextInput,
-  TouchableOpacity, Alert, ActivityIndicator, Modal, ScrollView,
+  View, Text, StyleSheet, FlatList, BackHandler,
+  TouchableOpacity, Alert, ActivityIndicator, Modal, ScrollView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
 import { Q } from '@nozbe/watermelondb';
@@ -16,24 +17,6 @@ const fmtData = (ts) => {
 
 const fmtValor = (n) =>
   `R$ ${Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-function parseDateStr(str) {
-  const nums = str.replace(/\D/g, '');
-  if (nums.length !== 8) return null;
-  const day   = parseInt(nums.slice(0, 2), 10);
-  const month = parseInt(nums.slice(2, 4), 10) - 1;
-  const year  = parseInt(nums.slice(4, 8), 10);
-  const d = new Date(year, month, day);
-  if (d.getFullYear() !== year || d.getMonth() !== month || d.getDate() !== day) return null;
-  return d;
-}
-
-function aplicarMascara(texto) {
-  const nums = texto.replace(/\D/g, '').slice(0, 8);
-  if (nums.length > 4) return `${nums.slice(0, 2)}/${nums.slice(2, 4)}/${nums.slice(4)}`;
-  if (nums.length > 2) return `${nums.slice(0, 2)}/${nums.slice(2)}`;
-  return nums;
-}
 
 // =============================================================================
 // Hard-delete da venda com estorno de estoque
@@ -109,12 +92,12 @@ async function excluirVendaComEstorno(db, venda) {
 
 // =============================================================================
 // Modal de Detalhes da Venda
+// onRequestClose já lida com o botão Voltar do Android nativamente no Modal
 // =============================================================================
 function DetalheVendaModal({ venda, clienteNome, onClose, db }) {
-  const [detalhe,  setDetalhe]  = useState(null);
-  const [loading,  setLoading]  = useState(true);
+  const [detalhe, setDetalhe] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Carrega itens e pagamentos ao abrir o modal
   React.useEffect(() => {
     if (!venda) return;
     const load = async () => {
@@ -139,10 +122,10 @@ function DetalheVendaModal({ venda, clienteNome, onClose, db }) {
 
         setDetalhe({
           itens: itens.map(i => ({
-            descricao:      produtoMap.get(i.produtoId)?.descricao ?? 'Produto removido',
-            quantidade:     i.quantidade,
-            precoUnitario:  i.precoUnitario,
-            subtotal:       i.quantidade * i.precoUnitario,
+            descricao:     produtoMap.get(i.produtoId)?.descricao ?? 'Produto removido',
+            quantidade:    i.quantidade,
+            precoUnitario: i.precoUnitario,
+            subtotal:      i.quantidade * i.precoUnitario,
           })),
           pagamentos: pagamentos.map(p => ({
             forma: formaMap.get(p.formaPagamentoId) ?? 'Outra',
@@ -160,11 +143,15 @@ function DetalheVendaModal({ venda, clienteNome, onClose, db }) {
   }, [venda?.id]);
 
   return (
-    <Modal visible={!!venda} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal
+      visible={!!venda}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
       <View style={mStyles.overlay}>
         <View style={[mStyles.sheet, SHADOW.lg]}>
 
-          {/* Header */}
           <View style={mStyles.header}>
             <View style={{ flex: 1 }}>
               <Text style={mStyles.titulo}>Detalhes da Venda</Text>
@@ -175,7 +162,6 @@ function DetalheVendaModal({ venda, clienteNome, onClose, db }) {
             </TouchableOpacity>
           </View>
 
-          {/* Cliente */}
           <View style={mStyles.clienteRow}>
             <Ionicons name="person-circle-outline" size={20} color={COLORS.primary} />
             <Text style={mStyles.clienteNome}>{clienteNome}</Text>
@@ -188,7 +174,6 @@ function DetalheVendaModal({ venda, clienteNome, onClose, db }) {
           ) : (
             <ScrollView showsVerticalScrollIndicator={false}>
 
-              {/* Itens */}
               <Text style={mStyles.sectionLabel}>PRODUTOS</Text>
               <View style={[mStyles.card, SHADOW.sm]}>
                 {detalhe?.itens.map((item, idx) => (
@@ -203,7 +188,6 @@ function DetalheVendaModal({ venda, clienteNome, onClose, db }) {
                 ))}
               </View>
 
-              {/* Pagamentos */}
               <Text style={[mStyles.sectionLabel, { marginTop: SPACING.md }]}>PAGAMENTO</Text>
               <View style={[mStyles.card, SHADOW.sm]}>
                 {detalhe?.pagamentos.map((pg, idx) => (
@@ -215,7 +199,6 @@ function DetalheVendaModal({ venda, clienteNome, onClose, db }) {
                 ))}
               </View>
 
-              {/* Total */}
               <View style={mStyles.totalRow}>
                 <Text style={mStyles.totalLabel}>Total</Text>
                 <Text style={mStyles.totalValor}>{fmtValor(venda?.total ?? 0)}</Text>
@@ -239,30 +222,35 @@ export default function HomeScreen() {
   const hoje        = new Date();
   const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 
-  const [dataInicialStr, setDataInicialStr] = useState(fmtData(primeiroDia));
-  const [dataFinalStr,   setDataFinalStr]   = useState(fmtData(hoje));
-  const [dataInicial,    setDataInicial]    = useState(() => {
+  // Datas como objetos Date — fonte de verdade (sem string intermediária)
+  const [dataInicial, setDataInicial] = useState(() => {
     const d = new Date(primeiroDia); d.setHours(0, 0, 0, 0); return d;
   });
   const [dataFinal, setDataFinal] = useState(() => {
     const d = new Date(hoje); d.setHours(23, 59, 59, 999); return d;
   });
 
+  // Controle dos DateTimePickers
+  const [showPickerInicial, setShowPickerInicial] = useState(false);
+  const [showPickerFinal,   setShowPickerFinal]   = useState(false);
+
   const [vendas,       setVendas]       = useState([]);
   const [clienteMap,   setClienteMap]   = useState({});
   const [totalPeriodo, setTotalPeriodo] = useState(0);
   const [loading,      setLoading]      = useState(false);
 
-  // Estado do modal de detalhes
   const [vendaSelecionada, setVendaSelecionada] = useState(null);
 
-  const carregarVendas = useCallback(async () => {
+  // Aceita datas opcionais para uso imediato após picker (evita stale closure)
+  const carregarVendas = useCallback(async (di, df) => {
+    const inicio = di ?? dataInicial;
+    const fim    = df ?? dataFinal;
     setLoading(true);
     try {
       const [vs, pessoas] = await Promise.all([
         db.get('vendas').query(
           Q.where('status', 'finalizada'),
-          Q.where('data_venda', Q.between(dataInicial.getTime(), dataFinal.getTime()))
+          Q.where('data_venda', Q.between(inicio.getTime(), fim.getTime()))
         ).fetch(),
         db.get('pessoas').query().fetch(),
       ]);
@@ -283,21 +271,37 @@ export default function HomeScreen() {
     carregarVendas();
   }, [carregarVendas]));
 
-  const handleDataInicialChange = (text) => {
-    const masked = aplicarMascara(text);
-    setDataInicialStr(masked);
-    if (masked.replace(/\D/g, '').length === 8) {
-      const d = parseDateStr(masked);
-      if (d) { d.setHours(0, 0, 0, 0); setDataInicial(d); }
+  // BackHandler: fecha o modal de detalhes ao pressionar Voltar no Android.
+  // Retorna true para consumir o evento e impedir que o app feche.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (vendaSelecionada) {
+        setVendaSelecionada(null);
+        return true;
+      }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [vendaSelecionada]);
+
+  // ── Handlers do DateTimePicker ─────────────────────────────────────────────
+  const onDataInicialChange = (event, selectedDate) => {
+    setShowPickerInicial(false);
+    if (selectedDate && event.type !== 'dismissed') {
+      const d = new Date(selectedDate);
+      d.setHours(0, 0, 0, 0);
+      setDataInicial(d);
+      carregarVendas(d, dataFinal); // passa datas frescas diretamente
     }
   };
 
-  const handleDataFinalChange = (text) => {
-    const masked = aplicarMascara(text);
-    setDataFinalStr(masked);
-    if (masked.replace(/\D/g, '').length === 8) {
-      const d = parseDateStr(masked);
-      if (d) { d.setHours(23, 59, 59, 999); setDataFinal(d); }
+  const onDataFinalChange = (event, selectedDate) => {
+    setShowPickerFinal(false);
+    if (selectedDate && event.type !== 'dismissed') {
+      const d = new Date(selectedDate);
+      d.setHours(23, 59, 59, 999);
+      setDataFinal(d);
+      carregarVendas(dataInicial, d);
     }
   };
 
@@ -327,7 +331,6 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
 
-      {/* Cabeçalho */}
       <View style={styles.header}>
         <Ionicons name="receipt-outline" size={22} color={COLORS.primary} />
         <Text style={styles.titulo}>Histórico de Vendas</Text>
@@ -337,35 +340,41 @@ export default function HomeScreen() {
       <View style={[styles.filtroCard, SHADOW.sm]}>
         <Text style={styles.filtroTitulo}>PERÍODO</Text>
         <View style={styles.filtroRow}>
+
+          {/* Botão data inicial */}
           <View style={styles.dateWrap}>
             <Text style={styles.dateLabel}>De</Text>
-            <TextInput
-              style={styles.dateInput}
-              value={dataInicialStr}
-              onChangeText={handleDataInicialChange}
-              placeholder="DD/MM/AAAA"
-              placeholderTextColor={COLORS.textLight}
-              keyboardType="number-pad"
-              maxLength={10}
-            />
+            <TouchableOpacity
+              style={styles.dateBtn}
+              onPress={() => setShowPickerInicial(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={15} color={COLORS.primary} />
+              <Text style={styles.dateBtnText}>{fmtData(dataInicial)}</Text>
+            </TouchableOpacity>
           </View>
-          <Ionicons name="arrow-forward-outline" size={16} color={COLORS.textLight} />
+
+          <Ionicons name="arrow-forward-outline" size={16} color={COLORS.textLight} style={styles.arrowIcon} />
+
+          {/* Botão data final */}
           <View style={styles.dateWrap}>
             <Text style={styles.dateLabel}>Até</Text>
-            <TextInput
-              style={styles.dateInput}
-              value={dataFinalStr}
-              onChangeText={handleDataFinalChange}
-              placeholder="DD/MM/AAAA"
-              placeholderTextColor={COLORS.textLight}
-              keyboardType="number-pad"
-              maxLength={10}
-            />
+            <TouchableOpacity
+              style={styles.dateBtn}
+              onPress={() => setShowPickerFinal(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={15} color={COLORS.primary} />
+              <Text style={styles.dateBtnText}>{fmtData(dataFinal)}</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.buscarBtn} onPress={carregarVendas}>
+
+          {/* Botão atualizar */}
+          <TouchableOpacity style={styles.buscarBtn} onPress={() => carregarVendas()}>
             <Ionicons name="search" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
+
         {vendas.length > 0 && (
           <View style={styles.resumoRow}>
             <Text style={styles.resumoLabel}>
@@ -376,7 +385,25 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Lista */}
+      {/* DateTimePickers nativos — renderizados fora do card para não empurrar layout */}
+      {showPickerInicial && (
+        <DateTimePicker
+          value={dataInicial}
+          mode="date"
+          display="default"
+          onChange={onDataInicialChange}
+        />
+      )}
+      {showPickerFinal && (
+        <DateTimePicker
+          value={dataFinal}
+          mode="date"
+          display="default"
+          onChange={onDataFinalChange}
+        />
+      )}
+
+      {/* Lista de Vendas */}
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -404,18 +431,13 @@ export default function HomeScreen() {
                 onPress={() => setVendaSelecionada(item)}
                 activeOpacity={0.75}
               >
-                {/* Ícone */}
                 <View style={styles.cardIcon}>
                   <Ionicons name="receipt" size={20} color={COLORS.primary} />
                 </View>
-
-                {/* Info: cliente em destaque, data abaixo */}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardCliente} numberOfLines={1}>{clienteNome}</Text>
                   <Text style={styles.cardData}>{fmtData(item.dataVenda)}</Text>
                 </View>
-
-                {/* Total + lixeira */}
                 <Text style={styles.cardTotal}>{fmtValor(item.total)}</Text>
                 <TouchableOpacity
                   style={styles.deleteBtn}
@@ -466,18 +488,24 @@ const styles = StyleSheet.create({
     fontSize: FONT.xs, fontWeight: '700', color: COLORS.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: SPACING.sm,
   },
-  filtroRow: { flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.sm },
-  dateWrap:  { flex: 1 },
-  dateLabel: { fontSize: FONT.xs, color: COLORS.textSecondary, marginBottom: 3 },
-  dateInput: {
-    fontSize: FONT.sm, color: COLORS.text, fontWeight: '600',
-    backgroundColor: COLORS.background, borderRadius: RADIUS.sm,
-    paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs + 2,
-    borderWidth: 1, borderColor: COLORS.border,
+  filtroRow:  { flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.sm },
+  dateWrap:   { flex: 1 },
+  dateLabel:  { fontSize: FONT.xs, color: COLORS.textSecondary, marginBottom: 4 },
+  arrowIcon:  { marginBottom: 10 },
+
+  // Botão compacto de calendário (mesmo padrão do PDV)
+  dateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs + 3,
+    backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.primary,
   },
+  dateBtnText: { fontSize: FONT.sm, fontWeight: '700', color: COLORS.primary },
+
   buscarBtn: {
     width: 40, height: 40, backgroundColor: COLORS.primary,
     borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center',
+    marginBottom: 1,
   },
   resumoRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -501,9 +529,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight,
     alignItems: 'center', justifyContent: 'center',
   },
-  // CLIENTE EM DESTAQUE (maior, negrito)
   cardCliente: { fontSize: FONT.md, fontWeight: '700', color: COLORS.text },
-  // DATA abaixo (menor, secundária)
   cardData:    { fontSize: FONT.xs, color: COLORS.textSecondary, marginTop: 2 },
   cardTotal:   { fontSize: FONT.md, fontWeight: '800', color: COLORS.primary },
   deleteBtn: {
@@ -512,12 +538,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.errorLight,
     alignItems: 'center', justifyContent: 'center',
   },
-  empty: { alignItems: 'center', paddingTop: 60, gap: SPACING.sm },
+  empty:      { alignItems: 'center', paddingTop: 60, gap: SPACING.sm },
   emptyTitle: { fontSize: FONT.lg, fontWeight: '700', color: COLORS.textSecondary },
   emptySub:   { fontSize: FONT.sm, color: COLORS.textLight, textAlign: 'center' },
 });
 
-// Estilos do Modal de Detalhes
 const mStyles = StyleSheet.create({
   overlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',

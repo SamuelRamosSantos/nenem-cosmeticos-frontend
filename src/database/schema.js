@@ -14,7 +14,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // =============================================================================
 
 export default appSchema({
-  version: 6,
+  version: 7,
   tables: [
 
     // -------------------------------------------------------------------------
@@ -182,6 +182,27 @@ export default appSchema({
         { name: 'valor',              type: 'number' },
         { name: 'created_at',         type: 'number' },
         { name: 'updated_at',         type: 'number' },
+      ],
+    }),
+
+
+    // -------------------------------------------------------------------------
+    // Tabelas locais de Balanço de Estoque (rascunho — não sincronizadas)
+    // -------------------------------------------------------------------------
+    tableSchema({
+      name: 'coletas',
+      columns: [
+        { name: 'nome',         type: 'string' },           // ex: "Corredor A"
+        { name: 'data_criacao', type: 'number' },           // Unix ms
+      ],
+    }),
+
+    tableSchema({
+      name: 'coleta_itens',
+      columns: [
+        { name: 'coleta_id',  type: 'string', isIndexed: true },
+        { name: 'produto_id', type: 'string', isIndexed: true },
+        { name: 'quantidade', type: 'number' },
       ],
     }),
 

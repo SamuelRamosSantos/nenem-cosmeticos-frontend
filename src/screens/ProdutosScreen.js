@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useLayoutEffect } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TextInput,
+  View, Text, StyleSheet, FlatList, TextInput, ScrollView,
   TouchableOpacity, Modal, Alert, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Q } from '@nozbe/watermelondb';
@@ -15,9 +17,15 @@ import ScannerModal from '../components/ScannerModal';
 import database from '../database';
 import { COLORS, SPACING, FONT, RADIUS, SHADOW } from '../theme';
 
+// Opções da barra de filtros
+const FILTROS = [
+  { key: 'todos',       label: 'Todos' },
+  { key: 'com_estoque', label: 'Com Estoque' },
+  { key: 'sem_estoque', label: 'Sem Estoque' },
+];
+
 // =============================================================================
 // KitStockBadge — reativo via withObservables + switchMap
-// Observa kit_itens E os produtos individuais: atualiza quando qtdEstoque muda
 // =============================================================================
 const KitStockBadgeBase = ({ kitItens, individuais }) => {
   if (kitItens === undefined || individuais === undefined) {
@@ -73,7 +81,7 @@ const enhanceKitBadge = withObservables(['produto'], ({ produto }) => {
 const KitStockBadge = enhanceKitBadge(KitStockBadgeBase);
 
 // =============================================================================
-// ProdutoItemBase — card de produto individual, com reatividade própria
+// ProdutoItemBase — card clicável para editar; botão lápis removido
 // =============================================================================
 const ProdutoItemBase = ({ produto, onMovimentar, onEditar, onExcluir }) => {
   const isKit = produto.tipoBaixa === 'M';
@@ -81,7 +89,11 @@ const ProdutoItemBase = ({ produto, onMovimentar, onEditar, onExcluir }) => {
   const baixo = produto.qtdEstoque > 0 && produto.qtdEstoque <= 5;
 
   return (
-    <View style={[styles.card, SHADOW.sm]}>
+    <TouchableOpacity
+      style={[styles.card, SHADOW.sm]}
+      onPress={() => onEditar(produto)}
+      activeOpacity={0.85}
+    >
       <View style={styles.cardTop}>
         <View style={[styles.cardIcon, sem && !isKit && styles.cardIconSem]}>
           <Ionicons
@@ -92,7 +104,7 @@ const ProdutoItemBase = ({ produto, onMovimentar, onEditar, onExcluir }) => {
         </View>
 
         <View style={{ flex: 1 }}>
-          <Text style={styles.cardNome} numberOfLines={1}>{produto.descricao}</Text>
+          <Text style={styles.cardNome} numberOfLines={0}>{produto.descricao}</Text>
           <View style={styles.cardMetaRow}>
             <Text style={styles.cardTipo}>
               {isKit ? '📦 Kit/Mestre' : '📦 Individual'}
@@ -103,7 +115,6 @@ const ProdutoItemBase = ({ produto, onMovimentar, onEditar, onExcluir }) => {
           </View>
         </View>
 
-        {/* Badge de estoque — reativo via withObservables */}
         {isKit ? (
           <KitStockBadge produto={produto} />
         ) : (
@@ -149,10 +160,6 @@ const ProdutoItemBase = ({ produto, onMovimentar, onEditar, onExcluir }) => {
           </View>
         )}
 
-        <TouchableOpacity style={styles.actionBtn} onPress={() => onEditar(produto)}>
-          <Ionicons name="create-outline" size={16} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-
         <TouchableOpacity
           style={[styles.actionBtn, { borderColor: COLORS.errorLight }]}
           onPress={() => onExcluir(produto)}
@@ -160,18 +167,17 @@ const ProdutoItemBase = ({ produto, onMovimentar, onEditar, onExcluir }) => {
           <Ionicons name="trash-outline" size={16} color={COLORS.error} />
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
-// Encapsula ProdutoItemBase com withObservables para observar mudanças no produto
 const enhanceProdutoItem = withObservables(['produto'], ({ produto }) => ({
   produto: produto.observe(),
 }));
 const ProdutoItem = enhanceProdutoItem(ProdutoItemBase);
 
 // =============================================================================
-// Lista reativa de produtos — apenas ativos, busca por nome/código
+// Lista reativa — searchQuery + filtro de estoque passados via withObservables
 // =============================================================================
 const ProdutosListBase = ({ produtos, onMovimentar, onEditar, onExcluir }) => {
   if (!produtos?.length) {
@@ -202,20 +208,28 @@ const ProdutosListBase = ({ produtos, onMovimentar, onEditar, onExcluir }) => {
   );
 };
 
-const enhance = withObservables(['searchQuery'], ({ searchQuery }) => {
+// filtro e searchQuery são "triggerProps": withObservables re-subscribe quando mudam
+const enhance = withObservables(['searchQuery', 'filtro'], ({ searchQuery, filtro }) => {
   const s = searchQuery?.trim();
-  if (!s) {
-    return { produtos: database.get('produtos').query(Q.where('ativo', true)) };
+  const conditions = [Q.where('ativo', true)];
+
+  // Aplica filtro de estoque na query do banco — reativo e eficiente
+  if (filtro === 'com_estoque') {
+    conditions.push(Q.where('qtd_estoque', Q.gt(0)));
+  } else if (filtro === 'sem_estoque') {
+    conditions.push(Q.where('qtd_estoque', Q.lte(0)));
   }
-  return {
-    produtos: database.get('produtos').query(
-      Q.where('ativo', true),
+
+  if (s) {
+    conditions.push(
       Q.or(
         Q.where('descricao', Q.like(`%${s}%`)),
         Q.where('cod_barras', s)
       )
-    ),
-  };
+    );
+  }
+
+  return { produtos: database.get('produtos').query(...conditions) };
 });
 const ProdutosList = enhance(ProdutosListBase);
 
@@ -225,15 +239,16 @@ const ProdutosList = enhance(ProdutosListBase);
 export default function ProdutosScreen() {
   const db         = useDatabase();
   const navigation = useNavigation();
+  const insets     = useSafeAreaInsets();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [filtro,      setFiltro]      = useState('todos');
   const [showScanner, setShowScanner] = useState(false);
   const [produtoMov,  setProdutoMov]  = useState(null);
   const [tipoMov,     setTipoMov]     = useState('entrada');
   const [qtdMov,      setQtdMov]      = useState('');
   const [loadingMov,  setLoadingMov]  = useState(false);
 
-  // Atalho "Balanço de Estoque" no header da aba
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -331,7 +346,7 @@ export default function ProdutosScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Busca */}
+      {/* ── Busca ── */}
       <View style={styles.searchContainer}>
         <View style={styles.searchRow}>
           <View style={[styles.searchBar, SHADOW.sm, { flex: 1 }]}>
@@ -356,10 +371,31 @@ export default function ProdutosScreen() {
             <Ionicons name="barcode-outline" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
+
+        {/* ── Filtros de estoque (pílulas horizontais) ── */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtrosScroll}
+          style={styles.filtrosContainer}
+        >
+          {FILTROS.map(f => (
+            <TouchableOpacity
+              key={f.key}
+              style={[styles.filtroPilula, filtro === f.key && styles.filtroPilulaAtiva]}
+              onPress={() => setFiltro(f.key)}
+            >
+              <Text style={[styles.filtroPilulaText, filtro === f.key && styles.filtroPilulaTextAtiva]}>
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <ProdutosList
         searchQuery={searchQuery}
+        filtro={filtro}
         onMovimentar={handleMovimentar}
         onEditar={p => navigation.navigate('CadastrarProduto', { produto: p })}
         onExcluir={handleExcluir}
@@ -378,14 +414,19 @@ export default function ProdutosScreen() {
         onClose={() => setShowScanner(false)}
       />
 
-      {/* Modal Movimentação */}
-      <Modal visible={!!produtoMov} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, SHADOW.lg]}>
+      {/* Modal Movimentação de Estoque */}
+      <Modal visible={!!produtoMov} animationType="slide" transparent onRequestClose={() => setProdutoMov(null)}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={[styles.modalCard, SHADOW.lg, {
+            paddingBottom: Math.max(SPACING.xl, (insets.bottom || 0) + SPACING.md),
+          }]}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitulo}>Movimentar Estoque</Text>
-                <Text style={styles.modalSubtitulo} numberOfLines={1}>
+                <Text style={styles.modalSubtitulo} numberOfLines={2}>
                   {produtoMov?.descricao}
                 </Text>
               </View>
@@ -465,7 +506,7 @@ export default function ProdutosScreen() {
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -473,9 +514,10 @@ export default function ProdutosScreen() {
 
 const styles = StyleSheet.create({
   container:       { flex: 1, backgroundColor: COLORS.background },
-  searchContainer: { padding: SPACING.md, paddingBottom: SPACING.sm },
+  searchContainer: { padding: SPACING.md, paddingBottom: 0 },
   searchRow: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   searchBar: {
     flexDirection: 'row', alignItems: 'center',
@@ -490,7 +532,20 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  list: { padding: SPACING.md, paddingTop: 0, gap: SPACING.sm, paddingBottom: 100 },
+
+  // Filtros de estoque — pílulas horizontais (mesmo padrão visual da tela de Clientes)
+  filtrosContainer: { marginBottom: SPACING.sm },
+  filtrosScroll:    { gap: SPACING.xs, paddingHorizontal: 2 },
+  filtroPilula: {
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs + 2,
+    borderRadius: RADIUS.full, borderWidth: 1.5,
+    borderColor: COLORS.border, backgroundColor: COLORS.surface,
+  },
+  filtroPilulaAtiva:     { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  filtroPilulaText:      { fontSize: FONT.sm, color: COLORS.textSecondary, fontWeight: '500' },
+  filtroPilulaTextAtiva: { color: COLORS.primary, fontWeight: '700' },
+
+  list: { padding: SPACING.md, paddingTop: SPACING.sm, gap: SPACING.sm, paddingBottom: 100 },
   card: {
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.md,
@@ -551,7 +606,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: FONT.lg, fontWeight: '700', color: COLORS.textSecondary },
   emptySub:   { fontSize: FONT.sm, color: COLORS.textLight, textAlign: 'center' },
-  // Modal Movimentação
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
   },

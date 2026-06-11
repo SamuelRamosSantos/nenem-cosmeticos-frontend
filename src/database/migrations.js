@@ -73,5 +73,27 @@ export default schemaMigrations({
         }),
       ],
     },
+    // v6 → v7: tabelas locais de Balanço de Estoque (Contagem Cega)
+    // Não sincronizadas — são rascunhos de inventário descartáveis
+    {
+      toVersion: 7,
+      steps: [
+        createTable({
+          name: 'coletas',
+          columns: [
+            { name: 'nome',         type: 'string' },
+            { name: 'data_criacao', type: 'number' },
+          ],
+        }),
+        createTable({
+          name: 'coleta_itens',
+          columns: [
+            { name: 'coleta_id',  type: 'string', isIndexed: true },
+            { name: 'produto_id', type: 'string', isIndexed: true },
+            { name: 'quantidade', type: 'number' },
+          ],
+        }),
+      ],
+    },
   ],
 });

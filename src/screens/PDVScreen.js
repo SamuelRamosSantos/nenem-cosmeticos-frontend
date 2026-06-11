@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
@@ -15,30 +16,42 @@ import database from '../database';
 import { COLORS, SPACING, FONT, RADIUS, SHADOW } from '../theme';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const fmt = (n) => `R$ ${Number(n || 0).toFixed(2)}`;
+const fmt = (n) => `R$ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
+
 const fmtData = (date) => {
   const d = new Date(date);
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 };
-const ajustarData = (date, dias) => {
-  const d = new Date(date);
-  d.setDate(d.getDate() + dias);
-  return d;
+
+// Máscara de moeda: recebe o texto atual do input, extrai dígitos e formata como "XX,XX"
+const mascaraPreco = (text) => {
+  const nums = text.replace(/\D/g, '');
+  if (!nums) return '0,00';
+  const val = parseInt(nums, 10);
+  return (val / 100).toFixed(2).replace('.', ',');
+};
+
+// Converte float para string mascarada: 25.5 -> "25,50"
+const floatParaMascara = (value) => {
+  const cents = Math.round(Number(value || 0) * 100);
+  return (cents / 100).toFixed(2).replace('.', ',');
 };
 
 // =============================================================================
 // PASSO 1: Seletor de Cliente reativo
 // =============================================================================
 const ClientesPickerBase = ({ pessoas, onSelecionar }) => (
+  // nestedScrollEnabled resolve o conflito de FlatList dentro de ScrollView
   <FlatList
     data={pessoas}
     keyExtractor={p => p.id}
     keyboardShouldPersistTaps="handled"
     style={styles.pickerList}
+    nestedScrollEnabled={true}
     renderItem={({ item }) => (
       <TouchableOpacity style={styles.pickerItem} onPress={() => onSelecionar(item)}>
         <Ionicons name="person-outline" size={16} color={COLORS.primary} />
-        <Text style={styles.pickerItemText} numberOfLines={1}>{item.nome}</Text>
+        <Text style={styles.pickerItemText} numberOfLines={0}>{item.nome}</Text>
       </TouchableOpacity>
     )}
     ListEmptyComponent={
@@ -61,15 +74,18 @@ const ClientesPicker = enhanceClientes(ClientesPickerBase);
 // PASSO 2: Buscador de Produtos reativo
 // =============================================================================
 const ProdutosPickerBase = ({ produtos, onSelecionar }) => (
+  // nestedScrollEnabled resolve o conflito de FlatList dentro de ScrollView
   <FlatList
     data={produtos}
     keyExtractor={p => p.id}
     keyboardShouldPersistTaps="handled"
     style={styles.pickerList}
+    nestedScrollEnabled={true}
     renderItem={({ item }) => (
       <TouchableOpacity style={styles.pickerItem} onPress={() => onSelecionar(item)}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.pickerItemText} numberOfLines={1}>{item.descricao}</Text>
+          {/* numberOfLines={0} permite quebra de linha natural sem truncar */}
+          <Text style={styles.pickerItemText} numberOfLines={0}>{item.descricao}</Text>
           <Text style={styles.pickerItemSub}>{fmt(item.precoVenda)} · estoque: {item.qtdEstoque}</Text>
         </View>
         <Ionicons name="add-circle" size={22} color={COLORS.primary} />
@@ -156,7 +172,6 @@ export default function PDVScreen() {
         }
         carrinho.adicionarItem(produto, percentualComissao);
       } else {
-        // Produto não encontrado: cai para busca manual
         setSearchProduto(codigo);
         setShowProdutos(true);
       }
@@ -171,25 +186,15 @@ export default function PDVScreen() {
   const [formaSelecionada, setFormaSelecionada] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Data da venda — string editável DD/MM/AAAA (sincronizada com o store)
-  const [dataStr, setDataStr] = useState(() => fmtData(carrinho.dataVenda));
+  // DateTimePicker nativo — estado separado da data do carrinho
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const handleDataChange = (text) => {
-    const nums    = text.replace(/\D/g, '').slice(0, 8);
-    let masked = nums;
-    if (nums.length > 2) masked = `${nums.slice(0,2)}/${nums.slice(2)}`;
-    if (nums.length > 4) masked = `${nums.slice(0,2)}/${nums.slice(2,4)}/${nums.slice(4)}`;
-    setDataStr(masked);
-    if (nums.length === 8) {
-      const day   = parseInt(nums.slice(0, 2), 10);
-      const month = parseInt(nums.slice(2, 4), 10) - 1;
-      const year  = parseInt(nums.slice(4, 8), 10);
-      const d = new Date(year, month, day);
-      if (d.getFullYear() === year && d.getMonth() === month && d.getDate() === day) {
-        carrinho.setDataVenda(d);
-      }
+  const onDateChange = useCallback((event, selectedDate) => {
+    setShowDatePicker(false);
+    if (selectedDate && event.type !== 'dismissed') {
+      carrinho.setDataVenda(selectedDate);
     }
-  };
+  }, [carrinho]);
 
   // Semente de formas de pagamento padrão
   useEffect(() => {
@@ -232,6 +237,8 @@ export default function PDVScreen() {
       return;
     }
     const total = carrinho.totalItens();
+    // Preserva a data selecionada antes de limpar o carrinho
+    const dataSalva = carrinho.dataVenda;
     setLoading(true);
     try {
       await finalizarVenda(db, {
@@ -246,6 +253,8 @@ export default function PDVScreen() {
         pagamentos: [{ formaPagamentoId: formaSelecionada.id, valor: total }],
       });
       carrinho.limparCarrinho();
+      // Restaura a data — ela só volta para "hoje" quando a tela for montada novamente
+      carrinho.setDataVenda(dataSalva);
       setFormaSelecionada(null);
       setShowPagamento(false);
       Alert.alert('Venda Realizada!', `Total: ${fmt(total)}`);
@@ -259,9 +268,11 @@ export default function PDVScreen() {
   const total = carrinho.totalItens();
 
   return (
+    // KeyboardAvoidingView garante que o footer sobe junto com o teclado
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
       <ScrollView
         style={{ flex: 1 }}
@@ -270,52 +281,32 @@ export default function PDVScreen() {
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ── CABEÇALHO: Data da Venda (digitável) ── */}
+        {/* ── CABEÇALHO: Data da Venda (ícone de calendário discreto) ── */}
         <View style={[styles.section, SHADOW.sm]}>
           <Text style={styles.sectionLabel}>Data da Venda</Text>
-          <View style={styles.dataRow}>
-            <TouchableOpacity
-              style={styles.dataBtn}
-              onPress={() => {
-                const nova = ajustarData(carrinho.dataVenda, -1);
-                carrinho.setDataVenda(nova);
-                setDataStr(fmtData(nova));
-              }}
-            >
-              <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.dataCalendarBtn}
+            onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+            <Text style={styles.dataText}>{fmtData(carrinho.dataVenda)}</Text>
+            <Ionicons name="chevron-down-outline" size={16} color={COLORS.textSecondary} />
+          </TouchableOpacity>
 
-            <View style={styles.dataInputWrap}>
-              <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
-              <TextInput
-                style={styles.dataInput}
-                value={dataStr}
-                onChangeText={handleDataChange}
-                placeholder="DD/MM/AAAA"
-                placeholderTextColor={COLORS.textLight}
-                keyboardType="number-pad"
-                maxLength={10}
-                selectTextOnFocus
-              />
-            </View>
-
-            <TouchableOpacity
-              style={styles.dataBtn}
-              onPress={() => {
-                const nova = ajustarData(carrinho.dataVenda, 1);
-                carrinho.setDataVenda(nova);
-                setDataStr(fmtData(nova));
-              }}
-            >
-              <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
+          {showDatePicker && (
+            <DateTimePicker
+              value={carrinho.dataVenda instanceof Date ? carrinho.dataVenda : new Date(carrinho.dataVenda)}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+            />
+          )}
         </View>
 
         {/* ── PASSO 1: Cliente ── */}
         <View style={[styles.section, SHADOW.sm]}>
-          <Text style={styles.sectionLabel}>  Cliente
-          </Text>
+          <Text style={styles.sectionLabel}>  Cliente</Text>
 
           {carrinho.clienteId ? (
             <View style={styles.clienteSelecionado}>
@@ -364,8 +355,7 @@ export default function PDVScreen() {
 
         {/* ── PASSO 2: Produtos / Carrinho ── */}
         <View style={[styles.section, SHADOW.sm]}>
-          <Text style={styles.sectionLabel}>  Produtos
-          </Text>
+          <Text style={styles.sectionLabel}>  Produtos</Text>
 
           {/* Campo busca de produto + botão câmera */}
           <View style={styles.searchRow}>
@@ -418,7 +408,7 @@ export default function PDVScreen() {
             <>
               {carrinho.itens.map(item => (
                 <ItemCarrinho
-                  key={item.produtoId}
+                  key={item.itemId}
                   item={item}
                   carrinho={carrinho}
                 />
@@ -437,7 +427,7 @@ export default function PDVScreen() {
 
       </ScrollView>
 
-      {/* ── TOTAL + FINALIZAR — sticky acima do teclado ── */}
+      {/* ── TOTAL + FINALIZAR — sticky, fora do ScrollView, sobe com o teclado ── */}
       {carrinho.itens.length > 0 && (
         <View style={[styles.footerCard, SHADOW.md]}>
           <View style={styles.totalRow}>
@@ -506,33 +496,32 @@ export default function PDVScreen() {
 }
 
 // =============================================================================
-// Item do Carrinho com inputs editáveis de quantidade e preço
+// Item do Carrinho com máscara de preço em tempo real
 // =============================================================================
 function ItemCarrinho({ item, carrinho }) {
-  const [precoStr, setPrecoStr] = useState(String(item.precoUnitario.toFixed(2)));
+  const [precoStr, setPrecoStr] = useState(() => floatParaMascara(item.precoUnitario));
 
-  const handlePrecoBlur = () => {
-    carrinho.alterarPreco(item.produtoId, precoStr);
-  };
-
+  // onChangeText com máscara de moeda brasileira — recalcula total a cada dígito
   const handlePrecoChange = (text) => {
-    const limpo = text.replace(/[^0-9.,]/g, '');
-    setPrecoStr(limpo);
+    const masked = mascaraPreco(text);
+    setPrecoStr(masked);
+    // itemId identifica a linha correta mesmo com múltiplos itens do mesmo produto
+    carrinho.alterarPreco(item.itemId, masked);
   };
 
   const subtotal = item.quantidade * item.precoUnitario;
 
   return (
     <View style={styles.itemCard}>
-      {/* Nome */}
-      <Text style={styles.itemNome} numberOfLines={1}>{item.descricao}</Text>
+      {/* numberOfLines={0} com flex: 1 permite quebra de linha natural */}
+      <Text style={styles.itemNome} numberOfLines={0}>{item.descricao}</Text>
 
       <View style={styles.itemRow}>
         {/* Quantidade editável */}
         <View style={styles.qtyWrap}>
           <TouchableOpacity
             style={styles.qtyBtn}
-            onPress={() => carrinho.alterarQuantidade(item.produtoId, item.quantidade - 1)}
+            onPress={() => carrinho.alterarQuantidade(item.itemId, item.quantidade - 1)}
           >
             <Ionicons name="remove" size={14} color={COLORS.primary} />
           </TouchableOpacity>
@@ -541,28 +530,27 @@ function ItemCarrinho({ item, carrinho }) {
             value={String(item.quantidade)}
             onChangeText={v => {
               const n = parseInt(v, 10);
-              if (!isNaN(n)) carrinho.alterarQuantidade(item.produtoId, n);
+              if (!isNaN(n)) carrinho.alterarQuantidade(item.itemId, n);
             }}
             keyboardType="number-pad"
             selectTextOnFocus
           />
           <TouchableOpacity
             style={styles.qtyBtn}
-            onPress={() => carrinho.alterarQuantidade(item.produtoId, item.quantidade + 1)}
+            onPress={() => carrinho.alterarQuantidade(item.itemId, item.quantidade + 1)}
           >
             <Ionicons name="add" size={14} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
 
-        {/* Preço unitário editável */}
+        {/* Preço unitário com máscara R$ — atualiza o total em tempo real */}
         <View style={styles.precoWrap}>
           <Text style={styles.precoLabel}>R$</Text>
           <TextInput
             style={styles.precoInput}
             value={precoStr}
             onChangeText={handlePrecoChange}
-            onBlur={handlePrecoBlur}
-            keyboardType="decimal-pad"
+            keyboardType="number-pad"
             selectTextOnFocus
           />
         </View>
@@ -571,7 +559,7 @@ function ItemCarrinho({ item, carrinho }) {
         <Text style={styles.itemSubtotal}>{fmt(subtotal)}</Text>
 
         {/* Remover */}
-        <TouchableOpacity onPress={() => carrinho.removerItem(item.produtoId)}>
+        <TouchableOpacity onPress={() => carrinho.removerItem(item.itemId)}>
           <Ionicons name="trash-outline" size={18} color={COLORS.error} />
         </TouchableOpacity>
       </View>
@@ -586,6 +574,7 @@ function ItemCarrinho({ item, carrinho }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  // flexGrow: 1 garante que o conteúdo expande e empurra o footer para baixo
   content: { flexGrow: 1, padding: SPACING.md, gap: SPACING.sm, paddingBottom: SPACING.sm },
 
   // Seções
@@ -601,31 +590,22 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary, textTransform: 'uppercase',
     letterSpacing: 0.5, marginBottom: SPACING.sm,
   },
-  stepBadge: {
-    backgroundColor: COLORS.primary, color: '#fff',
-    fontSize: FONT.xs, fontWeight: '800',
-    paddingHorizontal: 6, paddingVertical: 2,
-    borderRadius: RADIUS.full,
-  },
 
-  // Data
-  dataRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.md,
-  },
-  dataBtn: {
-    width: 36, height: 36, borderRadius: RADIUS.md,
+  // Data — botão compacto com ícone de calendário
+  dataCalendarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     backgroundColor: COLORS.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
   },
-  dataInputWrap: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs,
-    backgroundColor: COLORS.background, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.primary,
-  },
-  dataInput: {
-    flex: 1, fontSize: FONT.md, fontWeight: '700', color: COLORS.text,
-    textAlign: 'center', padding: 0,
+  dataText: {
+    fontSize: FONT.md, fontWeight: '700', color: COLORS.primary,
   },
 
   // Cliente selecionado
@@ -655,7 +635,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // Picker dropdown
+  // Picker dropdown — nestedScrollEnabled é aplicado diretamente na FlatList
   pickerContainer: {
     backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
     borderWidth: 1, borderColor: COLORS.border,
@@ -664,10 +644,11 @@ const styles = StyleSheet.create({
   },
   pickerList: { maxHeight: 180 },
   pickerItem: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm,
     padding: SPACING.sm + 2,
     borderBottomWidth: 1, borderBottomColor: COLORS.divider,
   },
+  // flex: 1 no container do texto garante que o nome quebre em vez de ser truncado
   pickerItemText: { flex: 1, fontSize: FONT.sm, fontWeight: '600', color: COLORS.text },
   pickerItemSub: { fontSize: FONT.xs, color: COLORS.textSecondary, marginTop: 2 },
   pickerVazio: {
@@ -692,7 +673,8 @@ const styles = StyleSheet.create({
     padding: SPACING.sm, marginBottom: SPACING.xs,
     borderWidth: 1, borderColor: COLORS.divider,
   },
-  itemNome: { fontSize: FONT.sm, fontWeight: '600', color: COLORS.text, marginBottom: 6 },
+  // flex: 1 + numberOfLines={0} no componente permitem quebra de linha livre
+  itemNome: { flex: 1, fontSize: FONT.sm, fontWeight: '600', color: COLORS.text, marginBottom: 6 },
   itemRow: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
   },
@@ -736,7 +718,7 @@ const styles = StyleSheet.create({
   },
   limparCarrinhoBtnText: { fontSize: FONT.xs, color: COLORS.error, fontWeight: '600' },
 
-  // Footer Total + Finalizar — sticky, fora do ScrollView
+  // Footer Total + Finalizar — sticky fora do ScrollView, sobe com o teclado via KAV
   footerCard: {
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: RADIUS.lg,

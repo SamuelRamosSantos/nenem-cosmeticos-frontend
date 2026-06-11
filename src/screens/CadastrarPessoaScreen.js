@@ -113,9 +113,9 @@ export default function CadastrarPessoaScreen({ navigation, route }) {
           label="Nome Completo"
           required
           value={nome}
-          onChangeText={setNome}
-          placeholder={tipo === 'C' ? 'Ex: Maria da Silva' : 'Ex: Distribuidora Bella Ltda'}
-          autoCapitalize="words"
+          onChangeText={v => setNome(v.toUpperCase())}
+          placeholder={tipo === 'C' ? 'EX: MARIA DA SILVA' : 'EX: DISTRIBUIDORA BELLA LTDA'}
+          autoCapitalize="characters"
         />
 
         <FormInput

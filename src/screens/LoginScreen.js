@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, Image,
   KeyboardAvoidingView, ScrollView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,107 +92,109 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-      {/* Branding */}
-      <View style={styles.brandingArea}>
-        <View style={styles.logoCircle}>
-          <Ionicons name="leaf" size={52} color={COLORS.accent} />
-        </View>
-        <Text style={styles.appName}>Neném Cosméticos</Text>
-        <Text style={styles.appSub}>Sistema de Vendas</Text>
-      </View>
-
-      {/* Banner de primeiro acesso */}
-      {semUsuarios === true && (
-        <View style={styles.banner}>
-          <Ionicons name="information-circle-outline" size={20} color={COLORS.warning} />
-          <Text style={styles.bannerText}>
-            Nenhum usuário cadastrado localmente.{'\n'}
-            Sincronize para fazer o primeiro login.
-          </Text>
-        </View>
-      )}
-
-      {/* Card de login */}
-      <View style={[styles.card, SHADOW.lg]}>
-        <Text style={styles.cardTitle}>Entrar</Text>
-
-        {/* Usuário */}
-        <View style={styles.inputWrap}>
-          <Ionicons name="person-outline" size={20} color={COLORS.textLight} style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Usuário"
-            placeholderTextColor={COLORS.textLight}
-            value={usuario}
-            onChangeText={setUsuario}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="next"
+        {/* Branding */}
+        <View style={styles.brandingArea}>
+          <Image
+            source={require('../../assets/logo-icon-transparente.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
           />
+          <Text style={styles.appName}>Neném Cosméticos</Text>
+          <Text style={styles.appSub}>Sistema de Vendas</Text>
         </View>
 
-        {/* Senha */}
-        <View style={styles.inputWrap}>
-          <Ionicons name="lock-closed-outline" size={20} color={COLORS.textLight} style={styles.inputIcon} />
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder="Senha"
-            placeholderTextColor={COLORS.textLight}
-            value={senha}
-            onChangeText={setSenha}
-            secureTextEntry={!showPass}
-            returnKeyType="done"
-            onSubmitEditing={handleLogin}
-          />
-          <TouchableOpacity onPress={() => setShowPass(v => !v)} style={styles.eyeBtn}>
-            <Ionicons
-              name={showPass ? 'eye-off-outline' : 'eye-outline'}
-              size={20}
-              color={COLORS.textLight}
+        {/* Banner de primeiro acesso */}
+        {semUsuarios === true && (
+          <View style={styles.banner}>
+            <Ionicons name="information-circle-outline" size={20} color={COLORS.warning} />
+            <Text style={styles.bannerText}>
+              Nenhum usuário cadastrado localmente.{'\n'}
+              Sincronize para fazer o primeiro login.
+            </Text>
+          </View>
+        )}
+
+        {/* Card de login */}
+        <View style={[styles.card, SHADOW.lg]}>
+          <Text style={styles.cardTitle}>Entrar</Text>
+
+          {/* Usuário */}
+          <View style={styles.inputWrap}>
+            <Ionicons name="person-outline" size={20} color={COLORS.textLight} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Usuário"
+              placeholderTextColor={COLORS.textLight}
+              value={usuario}
+              onChangeText={setUsuario}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="next"
             />
+          </View>
+
+          {/* Senha */}
+          <View style={styles.inputWrap}>
+            <Ionicons name="lock-closed-outline" size={20} color={COLORS.textLight} style={styles.inputIcon} />
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder="Senha"
+              placeholderTextColor={COLORS.textLight}
+              value={senha}
+              onChangeText={setSenha}
+              secureTextEntry={!showPass}
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+            />
+            <TouchableOpacity onPress={() => setShowPass(v => !v)} style={styles.eyeBtn}>
+              <Ionicons
+                name={showPass ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={COLORS.textLight}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Botão Entrar */}
+          <TouchableOpacity
+            style={[styles.loginBtn, (loading || sincronizando) && styles.loginBtnDisabled, SHADOW.md]}
+            onPress={handleLogin}
+            disabled={loading || sincronizando}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="log-in-outline" size={20} color="#fff" />
+                <Text style={styles.loginBtnText}>Entrar</Text>
+              </>
+            )}
           </TouchableOpacity>
+
+          {/* Divisor */}
+          <View style={styles.divisor}>
+            <View style={styles.divisorLine} />
+            <Text style={styles.divisorText}>ou</Text>
+            <View style={styles.divisorLine} />
+          </View>
+
+          {/* Botão Sincronizar Primeiro Acesso */}
+          <TouchableOpacity
+            style={[styles.syncBtn, (loading || sincronizando) && { opacity: 0.6 }]}
+            onPress={handleSincronizarPrimeiroAcesso}
+            disabled={loading || sincronizando}
+          >
+            {sincronizando ? (
+              <ActivityIndicator color={COLORS.primary} size="small" />
+            ) : (
+              <Ionicons name="cloud-download-outline" size={18} color={COLORS.primary} />
+            )}
+            <Text style={styles.syncBtnText}>
+              {sincronizando ? 'Sincronizando...' : 'Sincronizar Primeiro Acesso'}
+            </Text>
+          </TouchableOpacity>
+
         </View>
-
-        {/* Botão Entrar */}
-        <TouchableOpacity
-          style={[styles.loginBtn, (loading || sincronizando) && styles.loginBtnDisabled, SHADOW.md]}
-          onPress={handleLogin}
-          disabled={loading || sincronizando}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="log-in-outline" size={20} color="#fff" />
-              <Text style={styles.loginBtnText}>Entrar</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* Divisor */}
-        <View style={styles.divisor}>
-          <View style={styles.divisorLine} />
-          <Text style={styles.divisorText}>ou</Text>
-          <View style={styles.divisorLine} />
-        </View>
-
-        {/* Botão Sincronizar Primeiro Acesso */}
-        <TouchableOpacity
-          style={[styles.syncBtn, (loading || sincronizando) && { opacity: 0.6 }]}
-          onPress={handleSincronizarPrimeiroAcesso}
-          disabled={loading || sincronizando}
-        >
-          {sincronizando ? (
-            <ActivityIndicator color={COLORS.primary} size="small" />
-          ) : (
-            <Ionicons name="cloud-download-outline" size={18} color={COLORS.primary} />
-          )}
-          <Text style={styles.syncBtnText}>
-            {sincronizando ? 'Sincronizando...' : 'Sincronizar Primeiro Acesso'}
-          </Text>
-        </TouchableOpacity>
-
-      </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -212,12 +214,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.lg,
   },
-  logoCircle: {
-    width: 96, height: 96, borderRadius: 48,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center', justifyContent: 'center',
+  logoImage: {
+    width: 120, height: 120,
     marginBottom: SPACING.md,
-    borderWidth: 2, borderColor: 'rgba(243,213,127,0.4)',
   },
   appName: { fontSize: FONT.xl, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
   appSub: { fontSize: FONT.sm, color: 'rgba(255,255,255,0.65)', marginTop: 4 },

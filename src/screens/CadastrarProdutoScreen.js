@@ -5,14 +5,13 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Q } from '@nozbe/watermelondb';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
 import FormInput from '../components/FormInput';
 import { COLORS, SPACING, FONT, RADIUS, SHADOW } from '../theme';
 
-// Custo real baseado no percentual de comissão da marca
-// Custo = Preço - (Preço × Comissão / 100)  →  Custo = Preço × (1 - Comissão/100)
 function calcularCusto(precoStr, percentualComissao = 0) {
   const preco = parseFloat(String(precoStr).replace(',', '.'));
   if (isNaN(preco) || preco <= 0) return '';
@@ -44,7 +43,33 @@ export default function CadastrarProdutoScreen({ route }) {
 
   const [loading, setLoading] = useState(false);
 
-  // Recalcula custo sempre que preço ou marca mudam
+  // Scanner de código de barras inline
+  const [showScannerCodBarras, setShowScannerCodBarras] = useState(false);
+  const [scannerAtivo,         setScannerAtivo]         = useState(false);
+  // cameraAtiva começa false; só ativa em onShow (após animação do Modal concluída)
+  // Evita câmera achatada/preta no Android antes do layout ser calculado
+  const [cameraAtiva,          setCameraAtiva]          = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const handleOpenScanner = () => {
+    setCameraAtiva(false); // reset — onShow ativa após animação
+    setScannerAtivo(true);
+    setShowScannerCodBarras(true);
+  };
+
+  const handleBarcodeScanned = ({ data }) => {
+    setScannerAtivo(false);
+    setCameraAtiva(false);
+    setCodBarras(data.replace(/\D/g, '') || data);
+    setShowScannerCodBarras(false);
+  };
+
+  const handleFecharScanner = () => {
+    setScannerAtivo(false);
+    setCameraAtiva(false);
+    setShowScannerCodBarras(false);
+  };
+
   const recalcularCusto = useCallback((precoStr, marca) => {
     setCustoPreco(calcularCusto(precoStr, marca?.percentualComissao ?? 0));
   }, []);
@@ -55,21 +80,18 @@ export default function CadastrarProdutoScreen({ route }) {
         const lista = await database.get('marcas').query(Q.where('ativo', true)).fetch();
         setMarcas(lista);
 
-        // Tenta carregar a marca do produto em edição
         if (editando?.marcaId) {
           const m = lista.find(m => m.id === editando.marcaId);
           if (m) {
             setMarcaSelecionada(m);
             setCustoPreco(calcularCusto(editando.precoVenda?.toFixed(2), m.percentualComissao));
           } else {
-            // Marca inativa / deletada — sem marca selecionada
             setCustoPreco(calcularCusto(editando.precoVenda?.toFixed(2), 0));
           }
         } else {
           setCustoPreco(calcularCusto(editando?.precoVenda?.toFixed(2), 0));
         }
 
-        // Kit items em edição
         if (editando?.tipoBaixa === 'M') {
           const existentes = await database
             .get('produto_kit_itens')
@@ -88,7 +110,6 @@ export default function CadastrarProdutoScreen({ route }) {
     }, [database, editando])
   );
 
-  // Recalcula custo ao entrar em modo de edição quando marcaSelecionada é carregada
   useEffect(() => {
     if (editando && precoVenda) {
       recalcularCusto(precoVenda, marcaSelecionada);
@@ -96,7 +117,6 @@ export default function CadastrarProdutoScreen({ route }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marcaSelecionada?.id, editando?.id]);
 
-  // Busca dinâmica de produtos individuais para o kit
   useEffect(() => {
     if (tipoBaixa !== 'M' || !searchKit.trim()) { setKitResultados([]); return; }
     const addedIds = new Set(kitItens.map(ki => ki.produto.id));
@@ -107,27 +127,23 @@ export default function CadastrarProdutoScreen({ route }) {
       .then(r => setKitResultados(r.filter(p => !addedIds.has(p.id))));
   }, [searchKit, tipoBaixa, database, kitItens]);
 
-  // Handler: preço digitado
   const handlePrecoChange = (text) => {
     const limpo = text.replace(/[^0-9.,]/g, '');
     setPrecoVenda(limpo);
     recalcularCusto(limpo, marcaSelecionada);
   };
 
-  // Handler: marca selecionada no picker
   const handleSelecionarMarca = (marca) => {
     setMarcaSelecionada(marca);
     recalcularCusto(precoVenda, marca);
     setShowMarcaPicker(false);
   };
 
-  // Handler: remover marca
   const handleRemoverMarca = () => {
     setMarcaSelecionada(null);
     recalcularCusto(precoVenda, null);
   };
 
-  // Kit handlers
   const adicionarAoKit = (produto) => {
     setKitItens(prev => [...prev, { produto, quantidade: 1 }]);
     setSearchKit(''); setKitResultados([]);
@@ -138,7 +154,6 @@ export default function CadastrarProdutoScreen({ route }) {
       ki.produto.id === id ? { ...ki, quantidade: Math.max(1, ki.quantidade + delta) } : ki
     ));
 
-  // Código interno sequencial
   const proximoCodigoInterno = async () => {
     const todos = await database.get('produtos').query().fetch();
     const max   = todos.reduce((acc, p) => {
@@ -240,7 +255,6 @@ export default function CadastrarProdutoScreen({ route }) {
       >
         <View style={[styles.card, SHADOW.sm]}>
 
-          {/* Código interno (read-only em edição) */}
           {editando && (
             <View style={styles.codigoRow}>
               <Ionicons name="barcode-outline" size={16} color={COLORS.textSecondary} />
@@ -253,12 +267,11 @@ export default function CadastrarProdutoScreen({ route }) {
             label="Nome do Produto"
             required
             value={descricao}
-            onChangeText={setDescricao}
-            placeholder="Ex: Creme Hidratante 200ml"
-            autoCapitalize="sentences"
+            onChangeText={v => setDescricao(v.toUpperCase())}
+            placeholder="Ex: CREME HIDRATANTE 200ML"
+            autoCapitalize="characters"
           />
 
-          {/* Seletor de Marca (opcional) */}
           <View style={styles.field}>
             <Text style={styles.label}>Marca</Text>
             {marcaSelecionada ? (
@@ -286,7 +299,6 @@ export default function CadastrarProdutoScreen({ route }) {
             )}
           </View>
 
-          {/* Preço de venda — números/decimal apenas */}
           <FormInput
             label="Preço de Venda (R$)"
             required
@@ -296,7 +308,6 @@ export default function CadastrarProdutoScreen({ route }) {
             keyboardType="decimal-pad"
           />
 
-          {/* Custo — read-only, calculado em tempo real */}
           <FormInput
             label="Custo / Repasse (R$)"
             value={custoPreco}
@@ -306,16 +317,28 @@ export default function CadastrarProdutoScreen({ route }) {
             hint={`Preço × (1 - ${marcaSelecionada?.percentualComissao ?? 0}% / 100)`}
           />
 
-          {/* Cód. de Barras — só dígitos */}
-          <FormInput
-            label="Cód. de Barras (opcional)"
-            value={codBarras}
-            onChangeText={v => setCodBarras(v.replace(/\D/g, ''))}
-            placeholder="Somente números"
-            keyboardType="number-pad"
-          />
+          {/* Cód. de Barras com botão de scanner integrado */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Cód. de Barras (opcional)</Text>
+            <View style={styles.barcodeRow}>
+              <TextInput
+                style={styles.barcodeInput}
+                value={codBarras}
+                onChangeText={v => setCodBarras(v.replace(/\D/g, ''))}
+                placeholder="Somente números"
+                keyboardType="number-pad"
+                placeholderTextColor={COLORS.textLight}
+              />
+              <TouchableOpacity
+                style={styles.barcodeBtn}
+                onPress={handleOpenScanner}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="barcode-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-          {/* Toggle tipo de baixa */}
           <View style={styles.field}>
             <Text style={styles.label}>Tipo de Baixa no Estoque</Text>
             <View style={styles.toggleRow}>
@@ -341,7 +364,6 @@ export default function CadastrarProdutoScreen({ route }) {
             </View>
           </View>
 
-          {/* Switch movimenta estoque */}
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.switchLabel}>Movimenta Estoque</Text>
@@ -358,7 +380,6 @@ export default function CadastrarProdutoScreen({ route }) {
           </View>
         </View>
 
-        {/* Seção Itens do Kit */}
         {tipoBaixa === 'M' && (
           <View style={[styles.card, SHADOW.sm]}>
             <Text style={styles.sectionTitle}>Itens do Kit</Text>
@@ -384,7 +405,7 @@ export default function CadastrarProdutoScreen({ route }) {
               <View style={styles.kitResultados}>
                 {kitResultados.map(p => (
                   <TouchableOpacity key={p.id} style={styles.kitResultItem} onPress={() => adicionarAoKit(p)}>
-                    <Text style={styles.kitResultNome} numberOfLines={1}>{p.descricao}</Text>
+                    <Text style={styles.kitResultNome} numberOfLines={0}>{p.descricao}</Text>
                     <Ionicons name="add-circle" size={22} color={COLORS.primary} />
                   </TouchableOpacity>
                 ))}
@@ -402,7 +423,7 @@ export default function CadastrarProdutoScreen({ route }) {
                   <View style={styles.kitItemIcon}>
                     <Ionicons name="cube-outline" size={16} color={COLORS.primary} />
                   </View>
-                  <Text style={styles.kitItemNome} numberOfLines={1}>{ki.produto.descricao}</Text>
+                  <Text style={styles.kitItemNome} numberOfLines={0}>{ki.produto.descricao}</Text>
                   <View style={styles.kitQtyRow}>
                     <TouchableOpacity style={styles.kitQtyBtn} onPress={() => alterarQtdKit(ki.produto.id, -1)}>
                       <Ionicons name="remove" size={14} color={COLORS.primary} />
@@ -488,6 +509,70 @@ export default function CadastrarProdutoScreen({ route }) {
           </View>
         </View>
       </Modal>
+
+      {/* Modal scanner de código de barras — CameraView em tela cheia */}
+      <Modal
+        visible={showScannerCodBarras}
+        animationType="slide"
+        statusBarTranslucent
+        onShow={() => setCameraAtiva(true)}
+        onRequestClose={handleFecharScanner}
+      >
+        <View style={styles.scannerContainer}>
+          {permission?.granted ? (
+            <>
+              {/* Câmera monta SOMENTE após onShow (animação concluída) — evita achatamento no Android */}
+              {cameraAtiva ? (
+                <CameraView
+                  style={styles.scannerCamera}
+                  facing="back"
+                  barcodeScannerSettings={{
+                    barcodeTypes: ['ean8', 'ean13', 'code128', 'code39', 'upc_a', 'upc_e', 'itf14', 'qr'],
+                  }}
+                  onBarcodeScanned={scannerAtivo ? handleBarcodeScanned : undefined}
+                />
+              ) : (
+                <View style={styles.cameraPlaceholder}>
+                  <ActivityIndicator color={COLORS.accent} size="large" />
+                </View>
+              )}
+
+              {/* Overlay com máscara escura top/middle/bottom — mesma técnica do ScannerModal */}
+              <View style={styles.scannerOverlay} pointerEvents="none">
+                <View style={styles.scanOverlayTop} />
+                <View style={styles.scanOverlayMiddle}>
+                  <View style={styles.scanOverlaySide} />
+                  <View style={styles.scannerFrame} />
+                  <View style={styles.scanOverlaySide} />
+                </View>
+                <View style={styles.scanOverlayBottom}>
+                  <Text style={styles.scannerHint}>
+                    Aponte a câmera para o código de barras do produto
+                  </Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <View style={styles.scannerSemPermissao}>
+              <Ionicons name="camera-outline" size={64} color={COLORS.textLight} />
+              <Text style={styles.scannerSemPermissaoTitle}>Câmera necessária</Text>
+              <Text style={styles.scannerSemPermissaoSub}>
+                Permita o acesso à câmera para escanear o código de barras.
+              </Text>
+              <TouchableOpacity style={styles.permissaoBtn} onPress={requestPermission}>
+                <Ionicons name="camera" size={18} color="#fff" />
+                <Text style={styles.permissaoBtnText}>Permitir câmera</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <TouchableOpacity style={styles.scannerCloseBtn} onPress={handleFecharScanner}>
+            <View style={styles.scannerCloseBg}>
+              <Ionicons name="close" size={22} color="#fff" />
+            </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -529,6 +614,23 @@ const styles = StyleSheet.create({
   inputReadOnly: {
     backgroundColor: COLORS.background, borderColor: COLORS.divider, color: COLORS.textSecondary,
   },
+
+  // Campo de código de barras com botão de scanner
+  barcodeRow: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.xs,
+  },
+  barcodeInput: {
+    flex: 1,
+    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm + 2,
+    fontSize: FONT.md, color: COLORS.text, backgroundColor: COLORS.surface,
+  },
+  barcodeBtn: {
+    width: 46, height: 46, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
   toggleRow: { flexDirection: 'row', gap: SPACING.sm },
   toggleBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -587,7 +689,8 @@ const styles = StyleSheet.create({
   },
   disabled:     { opacity: 0.6 },
   salvarBtnText:{ color: '#fff', fontSize: FONT.lg, fontWeight: '800' },
-  // Modal
+
+  // Modal marcas
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.xl,
@@ -612,4 +715,50 @@ const styles = StyleSheet.create({
   novaMarcaBtnText: { fontSize: FONT.md, color: COLORS.primary, fontWeight: '600' },
   marcaVazia:     { alignItems: 'center', padding: SPACING.xl },
   marcaVaziaText: { fontSize: FONT.md, color: COLORS.textSecondary },
+
+  // Scanner de código de barras — mesmo padrão do ScannerModal.js
+  scannerContainer:  { flex: 1, backgroundColor: '#000', overflow: 'hidden' },
+  // CameraView com flex:1 (NÃO absoluteFillObject) — ocupa o container antes do layout nativo
+  scannerCamera:     { flex: 1 },
+  cameraPlaceholder: {
+    flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center',
+  },
+  // Overlay absolutamente posicionado SOBRE a câmera — estrutura top / middle / bottom
+  scannerOverlay:    { ...StyleSheet.absoluteFillObject, flexDirection: 'column' },
+  scanOverlayTop:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  scanOverlayMiddle: { flexDirection: 'row', height: 180 },
+  scanOverlaySide:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  scannerFrame: {
+    width: 260, height: 180,
+    borderWidth: 2.5, borderColor: '#fff', borderRadius: RADIUS.lg,
+  },
+  scanOverlayBottom: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', paddingTop: SPACING.lg,
+  },
+  scannerHint: {
+    color: '#fff', fontSize: FONT.sm, fontWeight: '600',
+    textAlign: 'center', paddingHorizontal: SPACING.lg,
+  },
+  scannerCloseBtn: { position: 'absolute', top: 52, right: SPACING.md },
+  scannerCloseBg: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  scannerSemPermissao: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    gap: SPACING.md, padding: SPACING.xl,
+  },
+  scannerSemPermissaoTitle: { fontSize: FONT.xl, fontWeight: '700', color: '#fff' },
+  scannerSemPermissaoSub: {
+    fontSize: FONT.sm, color: 'rgba(255,255,255,0.7)', textAlign: 'center',
+  },
+  permissaoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md,
+    marginTop: SPACING.sm,
+  },
+  permissaoBtnText: { color: '#fff', fontSize: FONT.md, fontWeight: '700' },
 });

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, TextInput, ActivityIndicator,
+  TouchableOpacity, ActivityIndicator, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
@@ -20,34 +21,16 @@ const fimMesAtual = () => {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
 };
 
-const parseDDMMYYYY = (str) => {
-  const nums = str.replace(/\D/g, '');
-  if (nums.length !== 8) return null;
-  const day   = parseInt(nums.slice(0, 2), 10);
-  const month = parseInt(nums.slice(2, 4), 10) - 1;
-  const year  = parseInt(nums.slice(4, 8), 10);
-  const d = new Date(year, month, day);
-  return (d.getFullYear() === year && d.getMonth() === month && d.getDate() === day) ? d : null;
-};
-
 const fmtDate = (date) => {
   const d = new Date(date);
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 };
 
-// Formata sempre com exatamente 2 casas decimais
 const fmt = (n) =>
   `R$ ${Number(n || 0).toLocaleString('pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-
-const aplicarMascaraData = (text) => {
-  const nums = text.replace(/\D/g, '').slice(0, 8);
-  if (nums.length <= 2) return nums;
-  if (nums.length <= 4) return `${nums.slice(0, 2)}/${nums.slice(2)}`;
-  return `${nums.slice(0, 2)}/${nums.slice(2, 4)}/${nums.slice(4)}`;
-};
 
 // =============================================================================
 // DashboardBase — recebe vendas reativas e computa KPIs + Vendas por Marca
@@ -241,7 +224,7 @@ const DashboardBase = ({ vendas }) => {
   );
 };
 
-// withObservables observa vendas finalizadas no período — reativo a novas vendas
+// withObservables — re-assina automaticamente quando início/fim mudam
 const enhanceDashboard = withObservables(['inicio', 'fim'], ({ inicio, fim }) => ({
   vendas: database.get('vendas').query(
     Q.where('status', 'finalizada'),
@@ -251,29 +234,40 @@ const enhanceDashboard = withObservables(['inicio', 'fim'], ({ inicio, fim }) =>
 const DashboardReativo = enhanceDashboard(DashboardBase);
 
 // =============================================================================
-// Tela Dashboard
+// Tela Dashboard / Análise
 // =============================================================================
 export default function DashboardScreen() {
-  const [dataInicio, setDataInicio] = useState(inicioMesAtual());
-  const [dataFim,    setDataFim]    = useState(fimMesAtual());
-  const [strInicio,  setStrInicio]  = useState(() => fmtDate(inicioMesAtual()));
-  const [strFim,     setStrFim]     = useState(() => fmtDate(fimMesAtual()));
+  // Datas como objetos Date — source of truth (sem string intermediária)
+  const [dataInicio, setDataInicio] = useState(inicioMesAtual);
+  const [dataFim,    setDataFim]    = useState(fimMesAtual);
 
-  const aplicar = () => {
-    const di = parseDDMMYYYY(strInicio);
-    const df = parseDDMMYYYY(strFim);
-    if (!di || !df || di > df) return;
-    di.setHours(0, 0, 0, 0);
-    df.setHours(23, 59, 59, 999);
-    setDataInicio(di);
-    setDataFim(df);
+  // Controle dos DateTimePickers nativos
+  const [showPickerInicio, setShowPickerInicio] = useState(false);
+  const [showPickerFim,    setShowPickerFim]    = useState(false);
+
+  // ── Handlers dos pickers ──────────────────────────────────────────────────
+  const onInicioChange = (event, selectedDate) => {
+    setShowPickerInicio(false);
+    if (selectedDate && event.type !== 'dismissed') {
+      const d = new Date(selectedDate);
+      d.setHours(0, 0, 0, 0);
+      setDataInicio(d);
+    }
   };
 
+  const onFimChange = (event, selectedDate) => {
+    setShowPickerFim(false);
+    if (selectedDate && event.type !== 'dismissed') {
+      const d = new Date(selectedDate);
+      d.setHours(23, 59, 59, 999);
+      setDataFim(d);
+    }
+  };
+
+  // Atalho "Mês atual"
   const mesAtual = () => {
-    const di = inicioMesAtual();
-    const df = fimMesAtual();
-    setStrInicio(fmtDate(di)); setStrFim(fmtDate(df));
-    setDataInicio(di); setDataFim(df);
+    setDataInicio(inicioMesAtual());
+    setDataFim(fimMesAtual());
   };
 
   return (
@@ -288,38 +282,62 @@ export default function DashboardScreen() {
             <Text style={styles.mesAtualText}>Mês atual</Text>
           </TouchableOpacity>
         </View>
+
         <View style={styles.filterRow}>
+          {/* Botão data início */}
           <View style={styles.filterInputWrap}>
             <Text style={styles.filterLabel}>De</Text>
-            <TextInput
-              style={styles.filterInput}
-              value={strInicio}
-              onChangeText={v => setStrInicio(aplicarMascaraData(v))}
-              onBlur={aplicar}
-              placeholder="DD/MM/AAAA"
-              placeholderTextColor={COLORS.textLight}
-              keyboardType="number-pad"
-            />
+            <TouchableOpacity
+              style={styles.dateBtn}
+              onPress={() => setShowPickerInicio(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={15} color={COLORS.primary} />
+              <Text style={styles.dateBtnText}>{fmtDate(dataInicio)}</Text>
+            </TouchableOpacity>
           </View>
-          <Ionicons name="arrow-forward" size={16} color={COLORS.textLight} style={{ marginTop: 20 }} />
+
+          <Ionicons
+            name="arrow-forward"
+            size={16}
+            color={COLORS.textLight}
+            style={styles.arrowIcon}
+          />
+
+          {/* Botão data fim */}
           <View style={styles.filterInputWrap}>
             <Text style={styles.filterLabel}>Até</Text>
-            <TextInput
-              style={styles.filterInput}
-              value={strFim}
-              onChangeText={v => setStrFim(aplicarMascaraData(v))}
-              onBlur={aplicar}
-              placeholder="DD/MM/AAAA"
-              placeholderTextColor={COLORS.textLight}
-              keyboardType="number-pad"
-            />
+            <TouchableOpacity
+              style={styles.dateBtn}
+              onPress={() => setShowPickerFim(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={15} color={COLORS.primary} />
+              <Text style={styles.dateBtnText}>{fmtDate(dataFim)}</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.aplicarBtn} onPress={aplicar}>
-            <Ionicons name="search" size={18} color="#fff" />
-          </TouchableOpacity>
         </View>
       </View>
 
+      {/* DateTimePickers nativos — renderizados fora do card */}
+      {showPickerInicio && (
+        <DateTimePicker
+          value={dataInicio}
+          mode="date"
+          display="default"
+          onChange={onInicioChange}
+        />
+      )}
+      {showPickerFim && (
+        <DateTimePicker
+          value={dataFim}
+          mode="date"
+          display="default"
+          onChange={onFimChange}
+        />
+      )}
+
+      {/* Dashboard reativo — re-assina quando dataInicio/dataFim mudam */}
       <DashboardReativo inicio={dataInicio.getTime()} fim={dataFim.getTime()} />
 
     </ScrollView>
@@ -337,24 +355,29 @@ const styles = StyleSheet.create({
   filterHeader: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm,
   },
-  filterTitle:     { flex: 1, fontSize: FONT.md, fontWeight: '700', color: COLORS.text },
-  mesAtualBtn:     { paddingHorizontal: SPACING.sm, paddingVertical: 4, backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.full },
-  mesAtualText:    { fontSize: FONT.xs, color: COLORS.primary, fontWeight: '700' },
+  filterTitle:  { flex: 1, fontSize: FONT.md, fontWeight: '700', color: COLORS.text },
+  mesAtualBtn:  {
+    paddingHorizontal: SPACING.sm, paddingVertical: 4,
+    backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.full,
+  },
+  mesAtualText: { fontSize: FONT.xs, color: COLORS.primary, fontWeight: '700' },
   filterRow:       { flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.sm },
   filterInputWrap: { flex: 1 },
   filterLabel: {
     fontSize: FONT.xs, fontWeight: '600', color: COLORS.textSecondary,
     textTransform: 'uppercase', marginBottom: SPACING.xs,
   },
-  filterInput: {
-    backgroundColor: COLORS.background, borderWidth: 1.5, borderColor: COLORS.border,
-    borderRadius: RADIUS.md, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs + 2,
-    fontSize: FONT.sm, color: COLORS.text, textAlign: 'center',
+  arrowIcon: { marginBottom: 10 },
+
+  // Botão compacto de calendário (mesmo padrão do PDV e HomeScreen)
+  dateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs + 3,
+    backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.primary,
   },
-  aplicarBtn: {
-    width: 40, height: 40, borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center',
-  },
+  dateBtnText: { fontSize: FONT.sm, fontWeight: '700', color: COLORS.primary },
+
   loadingWrap: { alignItems: 'center', padding: SPACING.xl, gap: SPACING.sm },
   loadingText: { fontSize: FONT.sm, color: COLORS.textSecondary },
   kpiRow:  { marginBottom: SPACING.sm },
@@ -362,7 +385,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
     padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border, borderLeftWidth: 4,
   },
-  kpiLabel: { fontSize: FONT.xs, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase', marginBottom: SPACING.xs },
+  kpiLabel: {
+    fontSize: FONT.xs, fontWeight: '600', color: COLORS.textSecondary,
+    textTransform: 'uppercase', marginBottom: SPACING.xs,
+  },
   kpiValue: { fontSize: FONT.xxl, fontWeight: '800' },
   kpiSub:   { fontSize: FONT.xs, color: COLORS.textSecondary, marginTop: 4 },
   sectionTitle: {

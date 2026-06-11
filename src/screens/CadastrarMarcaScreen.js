@@ -155,9 +155,9 @@ export default function CadastrarMarcaScreen({ navigation, route }) {
           label="Nome da Marca"
           required
           value={nome}
-          onChangeText={setNome}
-          placeholder="Ex: O Boticário, Natura..."
-          autoCapitalize="words"
+          onChangeText={v => setNome(v.toUpperCase())}
+          placeholder="EX: O BOTICÁRIO, NATURA..."
+          autoCapitalize="characters"
         />
 
         <FormInput

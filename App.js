@@ -24,7 +24,8 @@ import CadastrarPessoaScreen   from './src/screens/CadastrarPessoaScreen';
 import GerenciarMarcasScreen   from './src/screens/GerenciarMarcasScreen';
 import FormasPagamentoScreen   from './src/screens/FormasPagamentoScreen';
 import GerenciarUsuariosScreen from './src/screens/GerenciarUsuariosScreen';
-import BalancoEstoqueScreen    from './src/screens/BalancoEstoqueScreen';
+import ColetasScreen          from './src/screens/ColetasScreen';
+import ColetaDetalheScreen    from './src/screens/ColetaDetalheScreen';
 
 import { COLORS, FONT, SPACING } from './src/theme';
 
@@ -177,8 +178,14 @@ function AppNavigator() {
           <RootStack.Screen name="GerenciarUsuarios" component={GerenciarUsuariosScreen}
             options={{ ...HEADER_OPTS, headerShown: true, title: 'Gestão de Usuários' }}
           />
-          <RootStack.Screen name="BalancoEstoque" component={BalancoEstoqueScreen}
+          <RootStack.Screen name="BalancoEstoque" component={ColetasScreen}
             options={{ ...HEADER_OPTS, headerShown: true, title: 'Balanço de Estoque' }}
+          />
+          <RootStack.Screen name="ColetaDetalhe" component={ColetaDetalheScreen}
+            options={({ route }) => ({
+              ...HEADER_OPTS, headerShown: true,
+              title: route.params?.coletaNome ?? 'Contagem',
+            })}
           />
         </>
       ) : (

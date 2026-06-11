@@ -1,17 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Modal, Alert, ActivityIndicator,
-  KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView,
+  Modal, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
 import FormInput from '../components/FormInput';
 import { COLORS, SPACING, FONT, RADIUS, SHADOW } from '../theme';
 
 export default function GerenciarUsuariosScreen() {
-  const db = useDatabase();
+  const db     = useDatabase();
+  const insets = useSafeAreaInsets();
 
   const [usuarios,        setUsuarios]        = useState([]);
   const [loading,         setLoading]         = useState(false);
@@ -135,8 +136,7 @@ export default function GerenciarUsuariosScreen() {
             <View style={[styles.card, SHADOW.sm]}>
               <View style={[styles.avatar, !item.ativo && styles.avatarInativo]}>
                 <Ionicons
-                  name="person"
-                  size={22}
+                  name="person" size={22}
                   color={item.ativo ? COLORS.primary : COLORS.textLight}
                 />
               </View>
@@ -171,63 +171,71 @@ export default function GerenciarUsuariosScreen() {
         />
       )}
 
-      <TouchableOpacity style={[styles.fab, SHADOW.lg]} onPress={abrirCriar}>
+      {/* FAB — bottom dinâmico respeita barra de navegação do Android */}
+      <TouchableOpacity
+        style={[styles.fab, SHADOW.lg, { bottom: SPACING.lg + (insets.bottom || 0) }]}
+        onPress={abrirCriar}
+      >
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
 
       {/* Modal criar / editar */}
-      <Modal visible={showModal} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={[styles.modalCard, SHADOW.lg]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitulo}>
-                {editandoUsuario ? 'Editar Usuário' : 'Novo Usuário'}
-              </Text>
-              <TouchableOpacity onPress={() => setShowModal(false)}>
-                <Ionicons name="close" size={24} color={COLORS.text} />
+      <Modal visible={showModal} animationType="slide" transparent onRequestClose={() => setShowModal(false)}>
+        <View style={styles.modalOverlay}>
+          {/* KAV envolve apenas o card para empurrar o bottom-sheet acima do teclado */}
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={[styles.modalCard, SHADOW.lg, {
+              paddingBottom: Math.max(SPACING.xl, (insets.bottom || 0) + SPACING.md),
+            }]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitulo}>
+                  {editandoUsuario ? 'Editar Usuário' : 'Novo Usuário'}
+                </Text>
+                <TouchableOpacity onPress={() => setShowModal(false)}>
+                  <Ionicons name="close" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+
+              {/* ScrollView interno permite rolar se o teclado for alto */}
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <FormInput
+                  label="Nome de Usuário"
+                  required
+                  value={nome}
+                  onChangeText={setNome}
+                  placeholder="Ex: admin"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <FormInput
+                  label="Senha"
+                  required
+                  value={senha}
+                  onChangeText={setSenha}
+                  placeholder="Senha de acesso"
+                  secureTextEntry
+                />
+              </ScrollView>
+
+              <TouchableOpacity
+                style={[styles.salvarBtn, saving && { opacity: 0.6 }]}
+                onPress={handleSalvar}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                    <Text style={styles.salvarBtnText}>
+                      {editandoUsuario ? 'Salvar Alterações' : 'Criar Usuário'}
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
-
-            <FormInput
-              label="Nome de Usuário"
-              required
-              value={nome}
-              onChangeText={setNome}
-              placeholder="Ex: admin"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <FormInput
-              label="Senha"
-              required
-              value={senha}
-              onChangeText={setSenha}
-              placeholder="Senha de acesso"
-              secureTextEntry
-            />
-
-            <TouchableOpacity
-              style={[styles.salvarBtn, saving && { opacity: 0.6 }]}
-              onPress={handleSalvar}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                  <Text style={styles.salvarBtnText}>
-                    {editandoUsuario ? 'Salvar Alterações' : 'Criar Usuário'}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
@@ -264,20 +272,20 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   fab: {
-    position: 'absolute', right: SPACING.md, bottom: SPACING.lg,
+    position: 'absolute', right: SPACING.md,
     width: 56, height: 56, borderRadius: 28,
     backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center',
   },
-  empty: {
-    alignItems: 'center', paddingTop: 60, gap: SPACING.sm,
-  },
+  empty:      { alignItems: 'center', paddingTop: 60, gap: SPACING.sm },
   emptyTitle: { fontSize: FONT.lg, fontWeight: '700', color: COLORS.textSecondary },
   emptySub:   { fontSize: FONT.sm, color: COLORS.textLight, textAlign: 'center' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
+  },
   modalCard: {
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.lg, paddingBottom: SPACING.xl,
+    padding: SPACING.lg,
   },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
