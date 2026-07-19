@@ -81,7 +81,7 @@ export default function GerenciarMarcasScreen() {
               if (produtos.length === 0) {
                 // Sem produtos → hard delete direto
                 await db.write(async () => {
-                  await marca.destroyPermanently();
+                  await marca.markAsDeleted();
                 });
                 return;
               }
@@ -102,7 +102,7 @@ export default function GerenciarMarcasScreen() {
                   for (const p of produtos) {
                     await p.update(prod => { prod.marcaId = null; });
                   }
-                  await marca.destroyPermanently();
+                  await marca.markAsDeleted();
                 });
               } else {
                 // Com histórico de vendas → soft delete (preserva tudo)

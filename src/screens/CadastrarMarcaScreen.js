@@ -102,7 +102,7 @@ export default function CadastrarMarcaScreen({ navigation, route }) {
                 .fetch();
 
               if (produtos.length === 0) {
-                await db.write(async () => { await editando.destroyPermanently(); });
+                await db.write(async () => { await editando.markAsDeleted(); });
               } else {
                 let temVendas = false;
                 for (const p of produtos) {
@@ -115,8 +115,8 @@ export default function CadastrarMarcaScreen({ navigation, route }) {
 
                 if (!temVendas) {
                   await db.write(async () => {
-                    for (const p of produtos) await p.destroyPermanently();
-                    await editando.destroyPermanently();
+                    for (const p of produtos) await p.markAsDeleted();
+                    await editando.markAsDeleted();
                   });
                 } else {
                   await db.write(async () => {

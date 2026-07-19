@@ -223,7 +223,7 @@ export default function CadastrarProdutoScreen({ route }) {
               .get('produto_kit_itens')
               .query(Q.where('produto_mestre_id', productId))
               .fetch();
-            for (const ki of existentes) await ki.destroyPermanently();
+            for (const ki of existentes) await ki.markAsDeleted();
           }
           for (const ki of kitItens) {
             await database.get('produto_kit_itens').create(pki => {

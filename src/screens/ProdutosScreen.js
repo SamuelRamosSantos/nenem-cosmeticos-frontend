@@ -328,7 +328,7 @@ export default function ProdutosScreen() {
                 .fetchCount()) > 0;
 
               if (!temVendas && !temMov) {
-                await db.write(async () => { await produto.destroyPermanently(); });
+                await db.write(async () => { await produto.markAsDeleted(); });
               } else {
                 await db.write(async () => {
                   await produto.update(p => { p.ativo = false; });

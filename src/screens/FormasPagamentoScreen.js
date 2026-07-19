@@ -114,7 +114,7 @@ export default function FormasPagamentoScreen() {
           text: 'Excluir', style: 'destructive',
           onPress: async () => {
             try {
-              await db.write(async () => { await forma.destroyPermanently(); });
+              await db.write(async () => { await forma.markAsDeleted(); });
             } catch (err) {
               Alert.alert('Erro', err.message);
             }
