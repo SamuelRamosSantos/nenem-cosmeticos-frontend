@@ -8,6 +8,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
 import { Q } from '@nozbe/watermelondb';
+import { sincronizarSeConectado } from '../services/syncService';
 import { COLORS, SPACING, FONT, RADIUS, SHADOW } from '../theme';
 
 const fmtData = (ts) => {
@@ -270,6 +271,12 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => {
     carregarVendas();
   }, [carregarVendas]));
+
+  // Sincronização automática ao abrir o app (NC-56) — roda uma vez, ao montar
+  // a tela inicial, não a cada vez que a aba Home ganha foco.
+  useEffect(() => {
+    sincronizarSeConectado(db);
+  }, [db]);
 
   // BackHandler: fecha o modal de detalhes ao pressionar Voltar no Android.
   // Retorna true para consumir o evento e impedir que o app feche.

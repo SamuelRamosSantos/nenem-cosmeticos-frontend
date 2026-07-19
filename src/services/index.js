@@ -1,2 +1,6 @@
 export { finalizarVenda } from './vendaService';
-export { sincronizar }    from './syncService';
+export {
+  sincronizar,
+  sincronizarSeConectado,
+  iniciarSincronizacaoReativa,
+} from './syncService';

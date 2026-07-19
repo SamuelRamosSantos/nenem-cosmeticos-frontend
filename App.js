@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import database                from './src/database';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { iniciarSincronizacaoReativa } from './src/services/syncService';
 
 import LoginScreen             from './src/screens/LoginScreen';
 import HomeScreen              from './src/screens/HomeScreen';
@@ -128,6 +129,15 @@ function TabsNavigator() {
 // =============================================================================
 function AppNavigator() {
   const { isLoggedIn } = useAuth();
+
+  // Sincronização reativa pós-movimentação (NC-57): assina qualquer gravação
+  // nas tabelas sincronizáveis enquanto o usuário estiver logado, com debounce.
+  // O botão manual de sincronização (Configurações) continua disponível para
+  // áreas sem sinal, onde o gatilho automático simplesmente não dispara.
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    return iniciarSincronizacaoReativa(database);
+  }, [isLoggedIn]);
 
   if (isLoggedIn === null) {
     return (
