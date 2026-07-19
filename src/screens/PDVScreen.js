@@ -9,11 +9,13 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
+import { map } from 'rxjs/operators';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
 import useCarrinhoStore from '../stores/useCarrinhoStore';
 import { finalizarVenda } from '../services/vendaService';
 import ScannerModal from '../components/ScannerModal';
 import database from '../database';
+import { mascaraPreco, floatParaMascara } from '../utils/moeda';
 import { COLORS, SPACING, FONT, RADIUS, SHADOW } from '../theme';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -22,20 +24,6 @@ const fmt = (n) => `R$ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
 const fmtData = (date) => {
   const d = new Date(date);
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-};
-
-// Máscara de moeda: recebe o texto atual do input, extrai dígitos e formata como "XX,XX"
-const mascaraPreco = (text) => {
-  const nums = text.replace(/\D/g, '');
-  if (!nums) return '0,00';
-  const val = parseInt(nums, 10);
-  return (val / 100).toFixed(2).replace('.', ',');
-};
-
-// Converte float para string mascarada: 25.5 -> "25,50"
-const floatParaMascara = (value) => {
-  const cents = Math.round(Number(value || 0) * 100);
-  return (cents / 100).toFixed(2).replace('.', ',');
 };
 
 // =============================================================================
@@ -110,19 +98,29 @@ const ProdutosPickerBase = ({ produtos, onSelecionar }) => (
   />
 );
 
+// NC-80: prioriza produtos com saldo positivo, sem penalizar quem não
+// controla estoque (movimenta_estoque: false) — usa Array.sort estável, que
+// preserva a ordem de relevância textual original dentro de cada grupo, só
+// empurrando pra trás quem realmente está sem saldo disponível.
+function priorizarComEstoque(produtos) {
+  const prioridade = (p) => (p.movimentaEstoque === false || p.qtdEstoque > 0) ? 0 : 1;
+  return [...produtos].sort((a, b) => prioridade(a) - prioridade(b));
+}
+
 const enhanceProdutos = withObservables(['searchProduto'], ({ searchProduto }) => {
   const s = searchProduto?.trim();
-  if (!s || s.length < 2) {
-    return { produtos: database.get('produtos').query(Q.where('ativo', true)) };
-  }
+  const query = (!s || s.length < 2)
+    ? database.get('produtos').query(Q.where('ativo', true))
+    : database.get('produtos').query(
+        Q.where('ativo', true),
+        Q.or(
+          Q.where('descricao', Q.like(`%${s}%`)),
+          Q.where('cod_barras', s)
+        )
+      );
+
   return {
-    produtos: database.get('produtos').query(
-      Q.where('ativo', true),
-      Q.or(
-        Q.where('descricao', Q.like(`%${s}%`)),
-        Q.where('cod_barras', s)
-      )
-    ),
+    produtos: query.observe().pipe(map(priorizarComEstoque)),
   };
 });
 const ProdutosPicker = enhanceProdutos(ProdutosPickerBase);
