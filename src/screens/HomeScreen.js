@@ -82,10 +82,13 @@ async function excluirVendaComEstorno(db, venda) {
       }
     }
 
-    for (const mov  of movimentacoes) ops.push(mov.prepareDestroyPermanently());
-    for (const item of itens)         ops.push(item.prepareDestroyPermanently());
-    for (const pg   of pagamentos)    ops.push(pg.prepareDestroyPermanently());
-    ops.push(venda.prepareDestroyPermanently());
+    // vendas_itens / vendas_pagamentos / vendas / estoque_movimentacoes são
+    // tabelas sincronizadas — usa markAsDeleted (protocolo de sync), nunca
+    // destroyPermanently (NC-47).
+    for (const mov  of movimentacoes) ops.push(mov.prepareMarkAsDeleted());
+    for (const item of itens)         ops.push(item.prepareMarkAsDeleted());
+    for (const pg   of pagamentos)    ops.push(pg.prepareMarkAsDeleted());
+    ops.push(venda.prepareMarkAsDeleted());
 
     await db.batch(...ops);
   });
