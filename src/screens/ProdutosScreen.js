@@ -252,13 +252,22 @@ export default function ProdutosScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity
-          style={{ marginRight: SPACING.sm, padding: 4 }}
-          onPress={() => navigation.navigate('BalancoEstoque')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="scale-outline" size={22} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', marginRight: SPACING.sm, gap: SPACING.sm }}>
+          <TouchableOpacity
+            style={{ padding: 4 }}
+            onPress={() => navigation.navigate('ReprocessamentoEstoque')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="shield-checkmark-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ padding: 4 }}
+            onPress={() => navigation.navigate('BalancoEstoque')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="scale-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
       ),
     });
   }, [navigation]);

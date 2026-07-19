@@ -207,16 +207,26 @@ export default function ColetasScreen() {
         const ops = [];
 
         for (const produto of produtos) {
+          let novaQtd = null;
           if (mapa.has(produto.id)) {
-            const novaQtd = mapa.get(produto.id);
-            if (novaQtd !== produto.qtdEstoque) {
-              // prepareUpdate toca updated_at automaticamente
-              // → o sync reconhece a mudança na próxima sincronização
-              ops.push(produto.prepareUpdate(p => { p.qtdEstoque = novaQtd; }));
-              alterados++;
-            }
+            if (mapa.get(produto.id) !== produto.qtdEstoque) novaQtd = mapa.get(produto.id);
           } else if (zerarNaoContados && produto.qtdEstoque !== 0) {
-            ops.push(produto.prepareUpdate(p => { p.qtdEstoque = 0; }));
+            novaQtd = 0;
+          }
+
+          if (novaQtd !== null) {
+            const diff = novaQtd - produto.qtdEstoque;
+            ops.push(
+              db.get('estoque_movimentacoes').prepareCreate(m => {
+                m.produtoId        = produto.id;
+                m.tipoMovimentacao = diff > 0 ? 'ajuste_positivo' : 'ajuste_negativo';
+                m.quantidade       = Math.abs(diff);
+                m.dataMovimentacao = new Date();
+              })
+            );
+            // prepareUpdate toca updated_at automaticamente
+            // → o sync reconhece a mudança na próxima sincronização
+            ops.push(produto.prepareUpdate(p => { p.qtdEstoque = novaQtd; }));
             alterados++;
           }
         }

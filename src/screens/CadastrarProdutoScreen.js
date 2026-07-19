@@ -10,12 +10,13 @@ import { Q } from '@nozbe/watermelondb';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
 import FormInput from '../components/FormInput';
+import { mascaraPreco, floatParaMascara } from '../utils/moeda';
 import { COLORS, SPACING, FONT, RADIUS, SHADOW } from '../theme';
 
 function calcularCusto(precoStr, percentualComissao = 0) {
   const preco = parseFloat(String(precoStr).replace(',', '.'));
   if (isNaN(preco) || preco <= 0) return '';
-  return (preco * (1 - percentualComissao / 100)).toFixed(2);
+  return floatParaMascara(preco * (1 - percentualComissao / 100));
 }
 
 export default function CadastrarProdutoScreen({ route }) {
@@ -24,7 +25,9 @@ export default function CadastrarProdutoScreen({ route }) {
   const editando   = route.params?.produto;
 
   const [descricao,        setDescricao]       = useState(editando?.descricao ?? '');
-  const [precoVenda,       setPrecoVenda]       = useState(editando?.precoVenda?.toFixed(2) ?? '');
+  const [precoVenda,       setPrecoVenda]       = useState(
+    editando ? floatParaMascara(editando.precoVenda) : ''
+  );
   const [custoPreco,       setCustoPreco]       = useState('');
   const [codBarras,        setCodBarras]        = useState(editando?.codBarras ?? '');
   const [tipoBaixa,        setTipoBaixa]        = useState(editando?.tipoBaixa ?? 'I');
@@ -128,9 +131,9 @@ export default function CadastrarProdutoScreen({ route }) {
   }, [searchKit, tipoBaixa, database, kitItens]);
 
   const handlePrecoChange = (text) => {
-    const limpo = text.replace(/[^0-9.,]/g, '');
-    setPrecoVenda(limpo);
-    recalcularCusto(limpo, marcaSelecionada);
+    const masked = mascaraPreco(text);
+    setPrecoVenda(masked);
+    recalcularCusto(masked, marcaSelecionada);
   };
 
   const handleSelecionarMarca = (marca) => {
@@ -178,6 +181,18 @@ export default function CadastrarProdutoScreen({ route }) {
       return;
     }
 
+    const codBarrasNormalizado = codBarras.replace(/\D/g, '');
+    if (codBarrasNormalizado) {
+      const duplicados = await database
+        .get('produtos')
+        .query(Q.where('cod_barras', codBarrasNormalizado))
+        .fetch();
+      if (duplicados.some(p => p.id !== editando?.id)) {
+        Alert.alert('Atenção', 'Este código de barras já está em uso por outro produto.');
+        return;
+      }
+    }
+
     const comissao = marcaSelecionada?.percentualComissao ?? 0;
     const custo    = preco * (1 - comissao / 100);
 
@@ -192,7 +207,7 @@ export default function CadastrarProdutoScreen({ route }) {
             p.marcaId          = marcaSelecionada?.id ?? null;
             p.precoVenda       = preco;
             p.custoPreco       = custo;
-            p.codBarras        = codBarras.replace(/\D/g, '') || null;
+            p.codBarras        = codBarrasNormalizado || null;
             p.tipoBaixa        = tipoBaixa;
             p.movimentaEstoque = movimentaEstoque;
           });
@@ -205,7 +220,7 @@ export default function CadastrarProdutoScreen({ route }) {
             p.marcaId          = marcaSelecionada?.id ?? null;
             p.precoVenda       = preco;
             p.custoPreco       = custo;
-            p.codBarras        = codBarras.replace(/\D/g, '') || null;
+            p.codBarras        = codBarrasNormalizado || null;
             p.codigoInterno    = novoCodigo;
             p.tipoBaixa        = tipoBaixa;
             p.movimentaEstoque = movimentaEstoque;
@@ -305,7 +320,7 @@ export default function CadastrarProdutoScreen({ route }) {
             value={precoVenda}
             onChangeText={handlePrecoChange}
             placeholder="0,00"
-            keyboardType="decimal-pad"
+            keyboardType="number-pad"
           />
 
           <FormInput

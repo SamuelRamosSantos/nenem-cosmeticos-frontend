@@ -2,24 +2,18 @@
   "expo": {
     "name": "Neném Cosméticos",
     "slug": "nenem-cosmeticos",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
-    "icon": "./assets/Logo-APP.png",
-    "splash": {
-      "image": "./assets/logo-icon-transparente.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#435334"
-    },
+    "icon": "./assets/icon-1024.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#3c4531",
+        "foregroundImage": "./assets/adaptive-icon-foreground.png",
+        "monochromeImage": "./assets/adaptive-icon-foreground.png"
       },
       "package": "com.anonymous.frontend"
     },
@@ -30,7 +24,16 @@
     "plugins": [
       "expo-sharing",
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/logo-icon-transparente.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#3c4531"
+        }
+      ]
     ],
     "extra": {
       "eas": {
