@@ -178,6 +178,18 @@ export default function CadastrarProdutoScreen({ route }) {
       return;
     }
 
+    const codBarrasNormalizado = codBarras.replace(/\D/g, '');
+    if (codBarrasNormalizado) {
+      const duplicados = await database
+        .get('produtos')
+        .query(Q.where('cod_barras', codBarrasNormalizado))
+        .fetch();
+      if (duplicados.some(p => p.id !== editando?.id)) {
+        Alert.alert('Atenção', 'Este código de barras já está em uso por outro produto.');
+        return;
+      }
+    }
+
     const comissao = marcaSelecionada?.percentualComissao ?? 0;
     const custo    = preco * (1 - comissao / 100);
 
@@ -192,7 +204,7 @@ export default function CadastrarProdutoScreen({ route }) {
             p.marcaId          = marcaSelecionada?.id ?? null;
             p.precoVenda       = preco;
             p.custoPreco       = custo;
-            p.codBarras        = codBarras.replace(/\D/g, '') || null;
+            p.codBarras        = codBarrasNormalizado || null;
             p.tipoBaixa        = tipoBaixa;
             p.movimentaEstoque = movimentaEstoque;
           });
@@ -205,7 +217,7 @@ export default function CadastrarProdutoScreen({ route }) {
             p.marcaId          = marcaSelecionada?.id ?? null;
             p.precoVenda       = preco;
             p.custoPreco       = custo;
-            p.codBarras        = codBarras.replace(/\D/g, '') || null;
+            p.codBarras        = codBarrasNormalizado || null;
             p.codigoInterno    = novoCodigo;
             p.tipoBaixa        = tipoBaixa;
             p.movimentaEstoque = movimentaEstoque;
