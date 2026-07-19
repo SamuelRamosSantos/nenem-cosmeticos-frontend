@@ -27,6 +27,7 @@ import FormasPagamentoScreen   from './src/screens/FormasPagamentoScreen';
 import GerenciarUsuariosScreen from './src/screens/GerenciarUsuariosScreen';
 import ColetasScreen          from './src/screens/ColetasScreen';
 import ColetaDetalheScreen    from './src/screens/ColetaDetalheScreen';
+import ReprocessamentoEstoqueScreen from './src/screens/ReprocessamentoEstoqueScreen';
 
 import { COLORS, FONT, SPACING } from './src/theme';
 
@@ -196,6 +197,9 @@ function AppNavigator() {
               ...HEADER_OPTS, headerShown: true,
               title: route.params?.coletaNome ?? 'Contagem',
             })}
+          />
+          <RootStack.Screen name="ReprocessamentoEstoque" component={ReprocessamentoEstoqueScreen}
+            options={{ ...HEADER_OPTS, headerShown: true, title: 'Reprocessamento de Estoque' }}
           />
         </>
       ) : (
