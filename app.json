@@ -2,7 +2,7 @@
   "expo": {
     "name": "Neném Cosméticos",
     "slug": "nenem-cosmeticos",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon-1024.png",
     "userInterfaceStyle": "light",
