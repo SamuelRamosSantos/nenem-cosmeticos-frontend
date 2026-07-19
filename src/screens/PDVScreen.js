@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
@@ -40,7 +41,7 @@ const floatParaMascara = (value) => {
 // =============================================================================
 // PASSO 1: Seletor de Cliente reativo
 // =============================================================================
-const ClientesPickerBase = ({ pessoas, onSelecionar }) => (
+const ClientesPickerBase = ({ pessoas, searchCliente, onSelecionar, onCadastrarNovo }) => (
   // nestedScrollEnabled resolve o conflito de FlatList dentro de ScrollView
   <FlatList
     data={pessoas}
@@ -55,7 +56,19 @@ const ClientesPickerBase = ({ pessoas, onSelecionar }) => (
       </TouchableOpacity>
     )}
     ListEmptyComponent={
-      <Text style={styles.pickerVazio}>Nenhum cliente encontrado</Text>
+      searchCliente?.trim().length > 0 ? (
+        <TouchableOpacity
+          style={styles.cadastrarClienteBtn}
+          onPress={() => onCadastrarNovo(searchCliente.trim())}
+        >
+          <Ionicons name="person-add-outline" size={18} color={COLORS.primary} />
+          <Text style={styles.cadastrarClienteBtnText} numberOfLines={2}>
+            Cadastrar cliente "{searchCliente.trim()}"
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.pickerVazio}>Nenhum cliente encontrado</Text>
+      )
     }
   />
 );
@@ -143,6 +156,8 @@ const FormasPagamento = enhanceFormas(FormasPagamentoBase);
 // =============================================================================
 export default function PDVScreen() {
   const db = useDatabase();
+  const navigation = useNavigation();
+  const route = useRoute();
   const carrinho = useCarrinhoStore();
 
   // Buscas
@@ -209,11 +224,36 @@ export default function PDVScreen() {
     })();
   }, [db]);
 
+  // NC-82: retorno do cadastro rápido de cliente (aberto a partir da busca sem
+  // resultado) — seleciona o cliente recém-criado sem perder o carrinho (o
+  // carrinho vive no Zustand, fora da árvore de navegação).
+  useEffect(() => {
+    const novoId = route.params?.clienteRecemCriadoId;
+    if (!novoId) return;
+    (async () => {
+      try {
+        const pessoa = await db.get('pessoas').find(novoId);
+        carrinho.setCliente(pessoa.id, pessoa.nome);
+      } catch (_) { /* cliente pode ter sido removido entre a criação e o retorno */ }
+      navigation.setParams({ clienteRecemCriadoId: undefined });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.clienteRecemCriadoId]);
+
   // ── Handlers: cabeçalho ────────────────────────────────────────────────────
   const handleSelecionarCliente = (cliente) => {
     carrinho.setCliente(cliente.id, cliente.nome);
     setSearchCliente('');
     setShowClientes(false);
+  };
+
+  const handleCadastrarNovoCliente = (nomeDigitado) => {
+    setShowClientes(false);
+    navigation.navigate('CadastrarPessoa', {
+      tipoInicial: 'C',
+      nomePreenchido: nomeDigitado,
+      origemPDV: true,
+    });
   };
 
   // ── Handlers: produto ──────────────────────────────────────────────────────
@@ -340,6 +380,7 @@ export default function PDVScreen() {
                   <ClientesPicker
                     searchCliente={searchCliente}
                     onSelecionar={handleSelecionarCliente}
+                    onCadastrarNovo={handleCadastrarNovoCliente}
                   />
                   <TouchableOpacity
                     style={styles.fecharPicker}
@@ -654,6 +695,13 @@ const styles = StyleSheet.create({
   pickerVazio: {
     padding: SPACING.md, textAlign: 'center',
     fontSize: FONT.sm, color: COLORS.textSecondary,
+  },
+  cadastrarClienteBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: SPACING.xs, padding: SPACING.md,
+  },
+  cadastrarClienteBtnText: {
+    flex: 1, fontSize: FONT.sm, fontWeight: '700', color: COLORS.primary,
   },
   fecharPicker: {
     padding: SPACING.sm, alignItems: 'center',
