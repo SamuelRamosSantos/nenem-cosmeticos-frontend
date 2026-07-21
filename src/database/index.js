@@ -7,6 +7,7 @@ import migrations from './migrations'; // <-- 1. Adicionamos a importação aqui
 import Pessoa from './models/Pessoa';
 import Marca from './models/Marca';
 import FormaPagamento from './models/FormaPagamento';
+import FormaPagamentoTaxa from './models/FormaPagamentoTaxa';
 import Produto from './models/Produto';
 import ProdutoKitItem from './models/ProdutoKitItem';
 import EstoqueMovimentacao from './models/EstoqueMovimentacao';
@@ -35,6 +36,7 @@ const database = new Database({
     Pessoa,
     Marca,
     FormaPagamento,
+    FormaPagamentoTaxa,
     Produto,
     ProdutoKitItem,
     EstoqueMovimentacao,

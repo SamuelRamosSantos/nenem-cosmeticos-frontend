@@ -104,5 +104,33 @@ export default schemaMigrations({
         unsafeExecuteSql('DROP TABLE IF EXISTS usuarios;'),
       ],
     },
+    // v8 → v9: Novo Motor de Formas de Pagamento (NC-70/71/72) — tipo
+    // (V/C/P), campos de prazo, e tabela de taxas de cartão por parcela.
+    {
+      toVersion: 9,
+      steps: [
+        addColumns({
+          table: 'formas_pagamento',
+          columns: [
+            { name: 'tipo', type: 'string' },
+            { name: 'intervalo_dias', type: 'number', isOptional: true },
+            { name: 'limite_parcelas', type: 'number', isOptional: true },
+            { name: 'juros_percentual_padrao', type: 'number', isOptional: true },
+          ],
+        }),
+        unsafeExecuteSql("UPDATE formas_pagamento SET tipo = 'V' WHERE tipo IS NULL;"),
+        createTable({
+          name: 'forma_pagamento_taxas',
+          columns: [
+            { name: 'forma_pagamento_id', type: 'string', isIndexed: true },
+            { name: 'modalidade',         type: 'string' },
+            { name: 'parcelas',           type: 'number' },
+            { name: 'taxa_percentual',    type: 'number' },
+            { name: 'created_at', type: 'number' },
+            { name: 'updated_at', type: 'number' },
+          ],
+        }),
+      ],
+    },
   ],
 });

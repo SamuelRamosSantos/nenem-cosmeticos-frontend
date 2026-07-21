@@ -11,7 +11,7 @@ export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://nenem-cosmeti
 // nunca sobem pro servidor. 'usuarios' também não sincroniza mais — a
 // autenticação passou a ser sempre em nuvem, sem cópia local (ver AuthContext.js).
 export const TABELAS_SINCRONIZAVEIS = [
-  'pessoas', 'marcas', 'formas_pagamento',
+  'pessoas', 'marcas', 'formas_pagamento', 'forma_pagamento_taxas',
   'produtos', 'produto_kit_itens',
   'vendas', 'vendas_itens', 'vendas_pagamentos',
   'compras', 'compras_itens', 'compras_pagamentos',

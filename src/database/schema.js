@@ -14,7 +14,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // =============================================================================
 
 export default appSchema({
-  version: 8,
+  version: 9,
   tables: [
 
     // -------------------------------------------------------------------------
@@ -46,6 +46,26 @@ export default appSchema({
       name: 'formas_pagamento',
       columns: [
         { name: 'descricao',  type: 'string' },
+        { name: 'tipo',       type: 'string' }, // 'V' à vista | 'C' cartão | 'P' a prazo
+        // NC-72 — só usados quando tipo = 'P'
+        { name: 'intervalo_dias',          type: 'number', isOptional: true },
+        { name: 'limite_parcelas',         type: 'number', isOptional: true },
+        { name: 'juros_percentual_padrao', type: 'number', isOptional: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ],
+    }),
+
+    // -------------------------------------------------------------------------
+    // NC-71 — taxas de cartão (Débito/Crédito por parcela), só para
+    // formas_pagamento com tipo = 'C'.
+    tableSchema({
+      name: 'forma_pagamento_taxas',
+      columns: [
+        { name: 'forma_pagamento_id', type: 'string', isIndexed: true },
+        { name: 'modalidade',         type: 'string' }, // 'D' débito | 'C' crédito
+        { name: 'parcelas',           type: 'number' },
+        { name: 'taxa_percentual',    type: 'number' },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],
