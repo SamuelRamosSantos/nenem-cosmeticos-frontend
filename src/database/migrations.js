@@ -95,5 +95,14 @@ export default schemaMigrations({
         }),
       ],
     },
+    // v7 → v8: remove a tabela usuarios do app — autenticação passa a ser
+    // sempre em nuvem (JWT), sem fallback local. Senha nunca mais fica
+    // armazenada no aparelho.
+    {
+      toVersion: 8,
+      steps: [
+        unsafeExecuteSql('DROP TABLE IF EXISTS usuarios;'),
+      ],
+    },
   ],
 });

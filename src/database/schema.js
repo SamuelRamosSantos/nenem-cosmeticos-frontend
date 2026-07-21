@@ -14,7 +14,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // =============================================================================
 
 export default appSchema({
-  version: 7,
+  version: 8,
   tables: [
 
     // -------------------------------------------------------------------------
@@ -158,18 +158,6 @@ export default appSchema({
         { name: 'custo_unitario',type: 'number' },
         { name: 'created_at',    type: 'number' },
         { name: 'updated_at',    type: 'number' },
-      ],
-    }),
-
-    // -------------------------------------------------------------------------
-    tableSchema({
-      name: 'usuarios',
-      columns: [
-        { name: 'nome',       type: 'string' },
-        { name: 'senha',      type: 'string' },
-        { name: 'ativo',      type: 'boolean' },
-        { name: 'created_at', type: 'number' },
-        { name: 'updated_at', type: 'number' },
       ],
     }),
 

@@ -16,7 +16,6 @@ import VendaPagamento from './models/VendaPagamento';
 import CompraHeader from './models/CompraHeader';
 import CompraItem from './models/CompraItem';
 import CompraPagamento from './models/CompraPagamento';
-import Usuario from './models/Usuario';
 import Coleta from './models/Coleta';
 import ColetaItem from './models/ColetaItem';
 
@@ -45,7 +44,6 @@ const database = new Database({
     CompraHeader,
     CompraItem,
     CompraPagamento,
-    Usuario,
     Coleta,
     ColetaItem,
   ],

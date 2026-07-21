@@ -1,15 +1,17 @@
 import { synchronize } from '@nozbe/watermelondb/sync';
+import * as SecureStore from 'expo-secure-store';
 import { estaConectado } from './networkService';
 
 // Expo expõe variáveis de ambiente com prefixo EXPO_PUBLIC_
 // Defina EXPO_PUBLIC_API_URL no arquivo .env para sobrescrever o padrão.
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://nenem-cosmeticos.onrender.com/api';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://nenem-cosmeticos.onrender.com/api';
 
 // Mesma lista de tabelas sincronizáveis do backend (TABLE_CONFIG em
 // sync.controller.js). 'coletas'/'coleta_itens' ficam de fora: são locais,
-// nunca sobem pro servidor.
+// nunca sobem pro servidor. 'usuarios' também não sincroniza mais — a
+// autenticação passou a ser sempre em nuvem, sem cópia local (ver AuthContext.js).
 export const TABELAS_SINCRONIZAVEIS = [
-  'usuarios', 'pessoas', 'marcas', 'formas_pagamento',
+  'pessoas', 'marcas', 'formas_pagamento',
   'produtos', 'produto_kit_itens',
   'vendas', 'vendas_itens', 'vendas_pagamentos',
   'compras', 'compras_itens', 'compras_pagamentos',
@@ -28,7 +30,20 @@ export const TABELAS_SINCRONIZAVEIS = [
 //   - Após finalizar uma venda
 //   - Via botão manual de sincronização na UI
 // =============================================================================
+// Mensagem amigável para 401 — cobre tanto "sem token" quanto "token expirado"
+// (ver expiração de sessão em AuthContext.js).
+function erroSincronizacao(etapa, response) {
+  if (response.status === 401) {
+    return new Error('Sessão expirada. Faça login novamente para sincronizar.');
+  }
+  return new Error(`Falha no ${etapa} de sincronização: ${response.status} ${response.statusText}`);
+}
+
 export async function sincronizar(database) {
+  // Todas as rotas (incluindo /sync) exigem o JWT do login (ver NC-67/68/69).
+  const token = await SecureStore.getItemAsync('jwt');
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
   await synchronize({
     database,
 
@@ -38,12 +53,12 @@ export async function sincronizar(database) {
         schemaVersion,
       });
 
-      const response = await fetch(`${API_URL}/sync/pull?${params}`);
+      const response = await fetch(`${API_URL}/sync/pull?${params}`, {
+        headers: authHeaders,
+      });
 
       if (!response.ok) {
-        throw new Error(
-          `Falha no pull de sincronização: ${response.status} ${response.statusText}`
-        );
+        throw erroSincronizacao('pull', response);
       }
 
       // Formato esperado: { changes: { tabela: { created, updated, deleted } }, timestamp }
@@ -55,15 +70,13 @@ export async function sincronizar(database) {
         `${API_URL}/sync/push?lastPulledAt=${lastPulledAt ?? 0}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ changes }),
         }
       );
 
       if (!response.ok) {
-        throw new Error(
-          `Falha no push de sincronização: ${response.status} ${response.statusText}`
-        );
+        throw erroSincronizacao('push', response);
       }
     },
 
