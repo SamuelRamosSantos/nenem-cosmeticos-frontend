@@ -132,5 +132,39 @@ export default schemaMigrations({
         }),
       ],
     },
+    // v9 → v10: Geração de Títulos no PDV (NC-73/74/75) e motor de baixa
+    // parcial (NC-78).
+    {
+      toVersion: 10,
+      steps: [
+        createTable({
+          name: 'titulos',
+          columns: [
+            { name: 'venda_id',          type: 'string', isIndexed: true },
+            { name: 'cliente_id',        type: 'string', isOptional: true, isIndexed: true },
+            { name: 'parcela_numero',    type: 'number' },
+            { name: 'parcelas_total',    type: 'number' },
+            { name: 'valor_original',    type: 'number' },
+            { name: 'valor_taxa_cartao', type: 'number' },
+            { name: 'valor_liquido',     type: 'number' },
+            { name: 'data_vencimento',   type: 'number' },
+            { name: 'status',           type: 'string' },
+            { name: 'created_at',        type: 'number' },
+            { name: 'updated_at',        type: 'number' },
+          ],
+        }),
+        createTable({
+          name: 'titulos_baixas',
+          columns: [
+            { name: 'titulo_id',          type: 'string', isIndexed: true },
+            { name: 'forma_pagamento_id', type: 'string', isIndexed: true },
+            { name: 'valor_pago',         type: 'number' },
+            { name: 'data_baixa',         type: 'number' },
+            { name: 'created_at',         type: 'number' },
+            { name: 'updated_at',         type: 'number' },
+          ],
+        }),
+      ],
+    },
   ],
 });

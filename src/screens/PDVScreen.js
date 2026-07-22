@@ -199,6 +199,17 @@ export default function PDVScreen() {
   const [formaSelecionada, setFormaSelecionada] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // NC-74/75 — só importam quando a forma selecionada é tipo 'C' (cartão)
+  // ou 'P' (a prazo); usados pra calcular taxa/juros na geração dos títulos.
+  const [modalidadeCartao, setModalidadeCartao] = useState('D'); // 'D' débito | 'C' crédito
+  const [parcelas, setParcelas] = useState(1);
+
+  const handleSelecionarForma = (forma) => {
+    setFormaSelecionada(forma);
+    setModalidadeCartao('D');
+    setParcelas(1);
+  };
+
   // DateTimePicker nativo — estado separado da data do carrinho
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -274,6 +285,11 @@ export default function PDVScreen() {
       Alert.alert('Atenção', 'Selecione uma forma de pagamento.');
       return;
     }
+    // NC-75 — falha rápido na UI antes de tentar (finalizarVenda também valida).
+    if (formaSelecionada.tipo === 'P' && !carrinho.clienteId) {
+      Alert.alert('Atenção', 'Venda a prazo exige um cliente vinculado.');
+      return;
+    }
     const total = carrinho.totalItens();
     // Preserva a data selecionada antes de limpar o carrinho
     const dataSalva = carrinho.dataVenda;
@@ -288,12 +304,19 @@ export default function PDVScreen() {
           precoUnitario: i.precoUnitario,
           custoUnitario: i.custoCalculado,
         })),
-        pagamentos: [{ formaPagamentoId: formaSelecionada.id, valor: total }],
+        pagamentos: [{
+          formaPagamentoId: formaSelecionada.id,
+          valor: total,
+          modalidadeCartao,
+          parcelas,
+        }],
       });
       carrinho.limparCarrinho();
       // Restaura a data — ela só volta para "hoje" quando a tela for montada novamente
       carrinho.setDataVenda(dataSalva);
       setFormaSelecionada(null);
+      setModalidadeCartao('D');
+      setParcelas(1);
       setShowPagamento(false);
       Alert.alert('Venda Realizada!', `Total: ${fmt(total)}`);
     } catch (err) {
@@ -500,8 +523,67 @@ export default function PDVScreen() {
             <Text style={styles.modalSectionTitle}>Forma de Pagamento</Text>
             <FormasPagamento
               selecionada={formaSelecionada}
-              onSelecionar={setFormaSelecionada}
+              onSelecionar={handleSelecionarForma}
             />
+
+            {/* NC-74 — cartão: modalidade + parcelas (define a taxa aplicada) */}
+            {formaSelecionada?.tipo === 'C' && (
+              <View style={styles.parcelasWrap}>
+                <View style={styles.modalidadeRow}>
+                  {[{ key: 'D', label: 'Débito' }, { key: 'C', label: 'Crédito' }].map(m => (
+                    <TouchableOpacity
+                      key={m.key}
+                      style={[styles.modalidadeChip, modalidadeCartao === m.key && styles.modalidadeChipAtiva]}
+                      onPress={() => { setModalidadeCartao(m.key); setParcelas(1); }}
+                    >
+                      <Text style={[styles.modalidadeChipText, modalidadeCartao === m.key && styles.modalidadeChipTextAtiva]}>
+                        {m.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {modalidadeCartao === 'C' && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.parcelasScroll}>
+                    {Array.from({ length: 18 }, (_, i) => i + 1).map(n => (
+                      <TouchableOpacity
+                        key={n}
+                        style={[styles.parcelaChip, parcelas === n && styles.parcelaChipAtiva]}
+                        onPress={() => setParcelas(n)}
+                      >
+                        <Text style={[styles.parcelaChipText, parcelas === n && styles.parcelaChipTextAtiva]}>
+                          {n}x
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            )}
+
+            {/* NC-75 — a prazo: parcelas (até o limite da forma) + aviso de cliente */}
+            {formaSelecionada?.tipo === 'P' && (
+              <View style={styles.parcelasWrap}>
+                {!carrinho.clienteId && (
+                  <Text style={styles.avisoCliente}>
+                    Venda a prazo exige um cliente vinculado — selecione um no Passo 1.
+                  </Text>
+                )}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.parcelasScroll}>
+                  {Array.from({ length: formaSelecionada.limiteParcelas || 1 }, (_, i) => i + 1).map(n => (
+                    <TouchableOpacity
+                      key={n}
+                      style={[styles.parcelaChip, parcelas === n && styles.parcelaChipAtiva]}
+                      onPress={() => setParcelas(n)}
+                    >
+                      <Text style={[styles.parcelaChipText, parcelas === n && styles.parcelaChipTextAtiva]}>
+                        {n}x
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             <TouchableOpacity
               style={[
@@ -817,6 +899,31 @@ const styles = StyleSheet.create({
   formaBadgeSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
   formaBadgeText: { fontSize: FONT.sm, color: COLORS.textSecondary, fontWeight: '500' },
   formaBadgeTextSelected: { color: COLORS.primary, fontWeight: '700' },
+
+  // NC-74/75 — modalidade/parcelas no pagamento
+  parcelasWrap: { marginBottom: SPACING.lg },
+  modalidadeRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm },
+  modalidadeChip: {
+    flex: 1, alignItems: 'center', paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.border,
+  },
+  modalidadeChipAtiva: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
+  modalidadeChipText: { fontSize: FONT.sm, fontWeight: '600', color: COLORS.textSecondary },
+  modalidadeChipTextAtiva: { color: COLORS.primary, fontWeight: '700' },
+  parcelasScroll: { flexGrow: 0 },
+  parcelaChip: {
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.border,
+    marginRight: SPACING.xs,
+  },
+  parcelaChipAtiva: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
+  parcelaChipText: { fontSize: FONT.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  parcelaChipTextAtiva: { color: COLORS.primary, fontWeight: '700' },
+  avisoCliente: {
+    fontSize: FONT.xs, color: COLORS.warning, fontWeight: '600',
+    marginBottom: SPACING.sm,
+  },
+
   confirmarBtn: {
     backgroundColor: COLORS.primary, borderRadius: RADIUS.lg,
     flexDirection: 'row', alignItems: 'center',

@@ -14,7 +14,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // =============================================================================
 
 export default appSchema({
-  version: 9,
+  version: 10,
   tables: [
 
     // -------------------------------------------------------------------------
@@ -151,6 +151,39 @@ export default appSchema({
         { name: 'venda_id',           type: 'string', isIndexed: true },
         { name: 'forma_pagamento_id', type: 'string', isIndexed: true },
         { name: 'valor',              type: 'number' },
+        { name: 'created_at',         type: 'number' },
+        { name: 'updated_at',         type: 'number' },
+      ],
+    }),
+
+    // -------------------------------------------------------------------------
+    // NC-73/74/75 — Títulos (Contas a Receber), gerados na finalização da venda.
+    tableSchema({
+      name: 'titulos',
+      columns: [
+        { name: 'venda_id',          type: 'string', isIndexed: true },
+        { name: 'cliente_id',        type: 'string', isOptional: true, isIndexed: true },
+        { name: 'parcela_numero',    type: 'number' }, // ex.: 1 em "1/3"
+        { name: 'parcelas_total',    type: 'number' }, // ex.: 3 em "1/3"
+        { name: 'valor_original',    type: 'number' },
+        { name: 'valor_taxa_cartao', type: 'number' },
+        { name: 'valor_liquido',     type: 'number' },
+        { name: 'data_vencimento',   type: 'number' },
+        { name: 'status',           type: 'string' }, // 'Aberto' | 'Baixado' | 'Parcial'
+        { name: 'created_at',        type: 'number' },
+        { name: 'updated_at',        type: 'number' },
+      ],
+    }),
+
+    // -------------------------------------------------------------------------
+    // NC-78 — recebimentos contra um título (só forma tipo 'V' ou 'C').
+    tableSchema({
+      name: 'titulos_baixas',
+      columns: [
+        { name: 'titulo_id',          type: 'string', isIndexed: true },
+        { name: 'forma_pagamento_id', type: 'string', isIndexed: true },
+        { name: 'valor_pago',         type: 'number' },
+        { name: 'data_baixa',         type: 'number' },
         { name: 'created_at',         type: 'number' },
         { name: 'updated_at',         type: 'number' },
       ],

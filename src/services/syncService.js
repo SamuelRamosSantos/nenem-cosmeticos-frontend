@@ -16,6 +16,7 @@ export const TABELAS_SINCRONIZAVEIS = [
   'vendas', 'vendas_itens', 'vendas_pagamentos',
   'compras', 'compras_itens', 'compras_pagamentos',
   'estoque_movimentacoes',
+  'titulos', 'titulos_baixas',
 ];
 
 // =============================================================================

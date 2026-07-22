@@ -14,6 +14,8 @@ import EstoqueMovimentacao from './models/EstoqueMovimentacao';
 import VendaHeader from './models/VendaHeader';
 import VendaItem from './models/VendaItem';
 import VendaPagamento from './models/VendaPagamento';
+import Titulo from './models/Titulo';
+import TituloBaixa from './models/TituloBaixa';
 import CompraHeader from './models/CompraHeader';
 import CompraItem from './models/CompraItem';
 import CompraPagamento from './models/CompraPagamento';
@@ -43,6 +45,8 @@ const database = new Database({
     VendaHeader,
     VendaItem,
     VendaPagamento,
+    Titulo,
+    TituloBaixa,
     CompraHeader,
     CompraItem,
     CompraPagamento,
