@@ -13,6 +13,9 @@ export default class TituloBaixa extends Model {
   @field('titulo_id')          tituloId;
   @field('forma_pagamento_id') formaPagamentoId;
   @field('valor_pago')         valorPago;
+  @field('valor_desconto')     valorDesconto; // NC-77
+  @field('valor_juros')        valorJuros;    // NC-77 — juros/mora
+  @field('valor_taxa_cartao')  valorTaxaCartao; // taxa da adquirente nessa baixa (cartão)
 
   @date('data_baixa') dataBaixa;
   @readonly @date('created_at') createdAt;

@@ -19,6 +19,7 @@ export default class Titulo extends Model {
   @field('valor_taxa_cartao') valorTaxaCartao;
   @field('valor_liquido')     valorLiquido;
   @field('status')            status; // 'Aberto' | 'Baixado' | 'Parcial'
+  @field('reclassificado')    reclassificado; // true se a forma de pagamento foi alterada num estorno
 
   @date('data_vencimento') dataVencimento;
   @readonly @date('created_at') createdAt;

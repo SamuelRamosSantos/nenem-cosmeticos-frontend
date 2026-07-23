@@ -14,7 +14,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // =============================================================================
 
 export default appSchema({
-  version: 10,
+  version: 14,
   tables: [
 
     // -------------------------------------------------------------------------
@@ -170,6 +170,7 @@ export default appSchema({
         { name: 'valor_liquido',     type: 'number' },
         { name: 'data_vencimento',   type: 'number' },
         { name: 'status',           type: 'string' }, // 'Aberto' | 'Baixado' | 'Parcial'
+        { name: 'reclassificado',   type: 'boolean' }, // true se a forma de pagamento foi alterada num estorno
         { name: 'created_at',        type: 'number' },
         { name: 'updated_at',        type: 'number' },
       ],
@@ -183,6 +184,9 @@ export default appSchema({
         { name: 'titulo_id',          type: 'string', isIndexed: true },
         { name: 'forma_pagamento_id', type: 'string', isIndexed: true },
         { name: 'valor_pago',         type: 'number' },
+        { name: 'valor_desconto',     type: 'number' }, // NC-77
+        { name: 'valor_juros',        type: 'number' }, // NC-77 — juros/mora
+        { name: 'valor_taxa_cartao',  type: 'number' }, // taxa da adquirente nessa baixa (cartão)
         { name: 'data_baixa',         type: 'number' },
         { name: 'created_at',         type: 'number' },
         { name: 'updated_at',         type: 'number' },

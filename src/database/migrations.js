@@ -166,5 +166,72 @@ export default schemaMigrations({
         }),
       ],
     },
+    // v10 → v11: Painel Financeiro (NC-76/77) — código de busca no título,
+    // desconto/juros na baixa.
+    {
+      toVersion: 11,
+      steps: [
+        addColumns({
+          table: 'titulos',
+          columns: [
+            { name: 'codigo', type: 'string', isOptional: true, isIndexed: true },
+          ],
+        }),
+        addColumns({
+          table: 'titulos_baixas',
+          columns: [
+            { name: 'valor_desconto', type: 'number' },
+            { name: 'valor_juros', type: 'number' },
+          ],
+        }),
+        unsafeExecuteSql('UPDATE titulos_baixas SET valor_desconto = 0 WHERE valor_desconto IS NULL;'),
+        unsafeExecuteSql('UPDATE titulos_baixas SET valor_juros = 0 WHERE valor_juros IS NULL;'),
+      ],
+    },
+    // v11 → v12: taxa de cartão descontada na própria baixa (recebimento de
+    // título em aberto via cartão).
+    {
+      toVersion: 12,
+      steps: [
+        addColumns({
+          table: 'titulos_baixas',
+          columns: [
+            { name: 'valor_taxa_cartao', type: 'number' },
+          ],
+        }),
+        unsafeExecuteSql('UPDATE titulos_baixas SET valor_taxa_cartao = 0 WHERE valor_taxa_cartao IS NULL;'),
+      ],
+    },
+    // v12 → v13: abandona o "número do título" (codigo) — só parcela/total
+    // mesmo. Marca títulos reclassificados (forma de pagamento alterada num
+    // estorno) pra exibir um aviso na tela de Detalhes.
+    {
+      toVersion: 13,
+      steps: [
+        // O índice criado pelo isIndexed:true da coluna precisa ser removido
+        // antes — o SQLite do Android não derruba isso sozinho no DROP COLUMN.
+        unsafeExecuteSql('DROP INDEX IF EXISTS titulos_codigo;'),
+        unsafeExecuteSql('ALTER TABLE titulos DROP COLUMN codigo;'),
+        addColumns({
+          table: 'titulos',
+          columns: [
+            { name: 'reclassificado', type: 'boolean' },
+          ],
+        }),
+        unsafeExecuteSql('UPDATE titulos SET reclassificado = 0 WHERE reclassificado IS NULL;'),
+      ],
+    },
+    // v13 → v14: corrige um bug da migração v9 — ao adicionar a coluna
+    // 'tipo' (não-opcional) numa tabela com registros existentes, o
+    // WatermelonDB preencheu essas linhas com string vazia '' em vez de
+    // NULL, então o backfill de então ("WHERE tipo IS NULL") não pegou
+    // registros antigos como Dinheiro/PIX. Sem isso, eles nunca aparecem
+    // em filtros por tipo (ex.: forma de pagamento na Caixa de Recebimento).
+    {
+      toVersion: 14,
+      steps: [
+        unsafeExecuteSql("UPDATE formas_pagamento SET tipo = 'V' WHERE tipo IS NULL OR tipo = '';"),
+      ],
+    },
   ],
 });

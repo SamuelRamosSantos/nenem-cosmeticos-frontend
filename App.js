@@ -28,6 +28,9 @@ import GerenciarUsuariosScreen from './src/screens/GerenciarUsuariosScreen';
 import ColetasScreen          from './src/screens/ColetasScreen';
 import ColetaDetalheScreen    from './src/screens/ColetaDetalheScreen';
 import ReprocessamentoEstoqueScreen from './src/screens/ReprocessamentoEstoqueScreen';
+import DashboardFinanceiroScreen    from './src/screens/DashboardFinanceiroScreen';
+import CaixaRecebimentoScreen       from './src/screens/CaixaRecebimentoScreen';
+import DetalheTituloScreen          from './src/screens/DetalheTituloScreen';
 
 import { COLORS, FONT, SPACING } from './src/theme';
 
@@ -200,6 +203,17 @@ function AppNavigator() {
           />
           <RootStack.Screen name="ReprocessamentoEstoque" component={ReprocessamentoEstoqueScreen}
             options={{ ...HEADER_OPTS, headerShown: true, title: 'Reprocessamento de Estoque' }}
+          />
+
+          {/* Painel Financeiro (NC-76/77) */}
+          <RootStack.Screen name="DashboardFinanceiro" component={DashboardFinanceiroScreen}
+            options={{ ...HEADER_OPTS, headerShown: true, title: 'Painel Financeiro' }}
+          />
+          <RootStack.Screen name="CaixaRecebimento" component={CaixaRecebimentoScreen}
+            options={{ ...HEADER_OPTS, headerShown: true, title: 'Caixa de Recebimento' }}
+          />
+          <RootStack.Screen name="DetalheTitulo" component={DetalheTituloScreen}
+            options={{ ...HEADER_OPTS, headerShown: true, title: 'Detalhes do Título' }}
           />
         </>
       ) : (

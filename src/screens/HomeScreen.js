@@ -346,6 +346,22 @@ export default function HomeScreen() {
         <Text style={styles.titulo}>Histórico de Vendas</Text>
       </View>
 
+      {/* Atalho: Painel Financeiro (NC-76) */}
+      <TouchableOpacity
+        style={[styles.atalhoFinanceiro, SHADOW.sm]}
+        onPress={() => navigation.navigate('DashboardFinanceiro')}
+        activeOpacity={0.8}
+      >
+        <View style={styles.atalhoFinanceiroIcon}>
+          <Ionicons name="wallet-outline" size={22} color={COLORS.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.atalhoFinanceiroTitulo}>Painel Financeiro</Text>
+          <Text style={styles.atalhoFinanceiroSub}>Títulos a receber e baixas</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+      </TouchableOpacity>
+
       {/* Filtro de Período */}
       <View style={[styles.filtroCard, SHADOW.sm]}>
         <Text style={styles.filtroTitulo}>PERÍODO</Text>
@@ -488,6 +504,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: SPACING.sm,
   },
   titulo: { fontSize: FONT.lg, fontWeight: '700', color: COLORS.text },
+
+  atalhoFinanceiro: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
+    padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border,
+  },
+  atalhoFinanceiroIcon: {
+    width: 40, height: 40, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+  },
+  atalhoFinanceiroTitulo: { fontSize: FONT.md, fontWeight: '700', color: COLORS.text },
+  atalhoFinanceiroSub: { fontSize: FONT.xs, color: COLORS.textSecondary, marginTop: 2 },
 
   filtroCard: {
     marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
