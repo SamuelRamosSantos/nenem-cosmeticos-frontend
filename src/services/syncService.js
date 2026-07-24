@@ -40,6 +40,16 @@ function erroSincronizacao(etapa, response) {
   return new Error(`Falha no ${etapa} de sincronização: ${response.status} ${response.statusText}`);
 }
 
+// Timestamp da última sincronização (pull+push) bem-sucedida — usado na
+// tela de Configurações (NC-85). Toda chamada de sincronizar() que não
+// lançar erro conta, seja manual ou automática.
+const CHAVE_ULTIMA_SINCRONIZACAO = 'ultimaSincronizacao';
+
+export async function obterUltimaSincronizacao() {
+  const valor = await SecureStore.getItemAsync(CHAVE_ULTIMA_SINCRONIZACAO);
+  return valor ? Number(valor) : null;
+}
+
 export async function sincronizar(database) {
   // Todas as rotas (incluindo /sync) exigem o JWT do login (ver NC-67/68/69).
   const token = await SecureStore.getItemAsync('jwt');
@@ -85,6 +95,8 @@ export async function sincronizar(database) {
     // estão ativas (usar 1 enquanto não houver migrations implementadas)
     migrationsEnabledAtVersion: 1,
   });
+
+  await SecureStore.setItemAsync(CHAVE_ULTIMA_SINCRONIZACAO, String(Date.now()));
 }
 
 // Lock simples: evita duas sincronizações automáticas concorrentes e também

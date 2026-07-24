@@ -6,20 +6,23 @@ import { obterExpiracaoJwt } from '../utils/jwt';
 
 const AuthContext = createContext({
   isLoggedIn: null,
+  usuarioLogado: null,
   login:  async () => {},
   logout: async () => {},
 });
 
 export function AuthProvider({ children }) {
   const [isLoggedIn, setIsLoggedIn] = useState(null); // null = carregando
+  const [usuarioLogado, setUsuarioLogado] = useState(null); // nome do usuário autenticado (NC-85)
 
   // Toda entrada no app checa se a sessão (JWT) ainda é válida — se expirou,
   // força novo login (ele já é sempre em nuvem, ver login() abaixo).
   useEffect(() => {
     (async () => {
-      const [session, token] = await Promise.all([
+      const [session, token, nomeUsuario] = await Promise.all([
         SecureStore.getItemAsync('session'),
         SecureStore.getItemAsync('jwt'),
+        SecureStore.getItemAsync('usuarioNome'),
       ]);
 
       if (session !== 'authenticated' || !token) {
@@ -32,10 +35,12 @@ export function AuthProvider({ children }) {
       if (expirado) {
         await SecureStore.deleteItemAsync('session');
         await SecureStore.deleteItemAsync('jwt');
+        await SecureStore.deleteItemAsync('usuarioNome');
         setIsLoggedIn(false);
         return;
       }
 
+      setUsuarioLogado(nomeUsuario ?? null);
       setIsLoggedIn(true);
     })().catch(() => setIsLoggedIn(false));
   }, []);
@@ -61,17 +66,21 @@ export function AuthProvider({ children }) {
     await sincronizar(database);
 
     await SecureStore.setItemAsync('session', 'authenticated');
+    await SecureStore.setItemAsync('usuarioNome', data.usuario.nome);
+    setUsuarioLogado(data.usuario.nome);
     setIsLoggedIn(true);
   };
 
   const logout = async () => {
     await SecureStore.deleteItemAsync('session');
     await SecureStore.deleteItemAsync('jwt');
+    await SecureStore.deleteItemAsync('usuarioNome');
+    setUsuarioLogado(null);
     setIsLoggedIn(false);
   };
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, login, logout }}>
+    <AuthContext.Provider value={{ isLoggedIn, usuarioLogado, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
