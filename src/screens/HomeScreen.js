@@ -23,11 +23,20 @@ const fmtValor = (n) =>
 // Hard-delete da venda com estorno de estoque
 // =============================================================================
 async function excluirVendaComEstorno(db, venda) {
-  const [itens, pagamentos, movimentacoes] = await Promise.all([
+  const [itens, pagamentos, movimentacoes, titulos] = await Promise.all([
     db.get('vendas_itens').query(Q.where('venda_id', venda.id)).fetch(),
     db.get('vendas_pagamentos').query(Q.where('venda_id', venda.id)).fetch(),
     db.get('estoque_movimentacoes').query(Q.where('referencia_id', venda.id)).fetch(),
+    db.get('titulos').query(Q.where('venda_id', venda.id)).fetch(),
   ]);
+
+  // Títulos da venda (NC-76/77) são excluídos junto — independente de já
+  // terem baixa ou não, uma venda excluída não pode deixar contas a receber
+  // órfãs pra trás.
+  const tituloIds = titulos.map(t => t.id);
+  const baixas = tituloIds.length > 0
+    ? await db.get('titulos_baixas').query(Q.where('titulo_id', Q.oneOf(tituloIds))).fetch()
+    : [];
 
   const produtoIds = [...new Set(itens.map(i => i.produtoId))];
   const produtos = produtoIds.length > 0
@@ -82,12 +91,14 @@ async function excluirVendaComEstorno(db, venda) {
       }
     }
 
-    // vendas_itens / vendas_pagamentos / vendas / estoque_movimentacoes são
-    // tabelas sincronizadas — usa markAsDeleted (protocolo de sync), nunca
-    // destroyPermanently (NC-47).
+    // vendas_itens / vendas_pagamentos / vendas / estoque_movimentacoes /
+    // titulos / titulos_baixas são tabelas sincronizadas — usa markAsDeleted
+    // (protocolo de sync), nunca destroyPermanently (NC-47).
     for (const mov  of movimentacoes) ops.push(mov.prepareMarkAsDeleted());
     for (const item of itens)         ops.push(item.prepareMarkAsDeleted());
     for (const pg   of pagamentos)    ops.push(pg.prepareMarkAsDeleted());
+    for (const b    of baixas)        ops.push(b.prepareMarkAsDeleted());
+    for (const t    of titulos)       ops.push(t.prepareMarkAsDeleted());
     ops.push(venda.prepareMarkAsDeleted());
 
     await db.batch(...ops);
