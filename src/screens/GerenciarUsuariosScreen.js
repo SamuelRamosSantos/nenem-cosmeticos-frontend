@@ -31,7 +31,10 @@ export default function GerenciarUsuariosScreen() {
       lista.sort((a, b) => (b.ativo - a.ativo) || a.nome.localeCompare(b.nome));
       setUsuarios(lista);
     } catch (e) {
-      Alert.alert('Erro ao carregar usuários', e.message);
+      // Sessão expirada já mostrou seu próprio alerta e força o logout (NC-86).
+      if (!e.sessaoExpirada) {
+        Alert.alert('Erro ao carregar usuários', e.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -72,7 +75,9 @@ export default function GerenciarUsuariosScreen() {
       });
       carregarUsuarios();
     } catch (e) {
-      Alert.alert('Erro', e.message);
+      if (!e.sessaoExpirada) {
+        Alert.alert('Erro', e.message);
+      }
     }
   };
 
@@ -116,7 +121,9 @@ export default function GerenciarUsuariosScreen() {
       setShowModal(false);
       carregarUsuarios();
     } catch (e) {
-      Alert.alert('Erro ao salvar', e.message);
+      if (!e.sessaoExpirada) {
+        Alert.alert('Erro ao salvar', e.message);
+      }
     } finally {
       setSaving(false);
     }

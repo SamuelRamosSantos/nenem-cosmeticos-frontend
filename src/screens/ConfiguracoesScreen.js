@@ -126,7 +126,10 @@ export default function ConfiguracoesScreen() {
       setUltimaSincronizacao(Date.now());
       Alert.alert('Sincronização concluída', `Às ${new Date().toLocaleTimeString('pt-BR')}`);
     } catch (err) {
-      Alert.alert('Erro na sincronização', err.message);
+      // Sessão expirada já mostrou seu próprio alerta e força o logout (NC-86).
+      if (!err.sessaoExpirada) {
+        Alert.alert('Erro na sincronização', err.message);
+      }
     } finally {
       setSyncing(false);
     }

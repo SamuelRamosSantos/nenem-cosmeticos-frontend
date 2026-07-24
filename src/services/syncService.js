@@ -1,6 +1,7 @@
 import { synchronize } from '@nozbe/watermelondb/sync';
 import * as SecureStore from 'expo-secure-store';
 import { estaConectado } from './networkService';
+import { sessaoExpirada, SessaoExpiradaError } from './authEvents';
 
 // Expo expõe variáveis de ambiente com prefixo EXPO_PUBLIC_
 // Defina EXPO_PUBLIC_API_URL no arquivo .env para sobrescrever o padrão.
@@ -31,11 +32,14 @@ export const TABELAS_SINCRONIZAVEIS = [
 //   - Após finalizar uma venda
 //   - Via botão manual de sincronização na UI
 // =============================================================================
-// Mensagem amigável para 401 — cobre tanto "sem token" quanto "token expirado"
-// (ver expiração de sessão em AuthContext.js).
+// 401 — cobre tanto "sem token" quanto "token expirado" em qualquer ponto do
+// sync (pull ou push). Dispara o alerta global de sessão expirada (NC-86) e
+// devolve um erro marcado, pra quem chamar sincronizar() saber que não deve
+// mostrar seu próprio alerta genérico de erro em cima.
 function erroSincronizacao(etapa, response) {
   if (response.status === 401) {
-    return new Error('Sessão expirada. Faça login novamente para sincronizar.');
+    sessaoExpirada();
+    return new SessaoExpiradaError();
   }
   return new Error(`Falha no ${etapa} de sincronização: ${response.status} ${response.statusText}`);
 }

@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { API_URL } from './syncService';
+import { sessaoExpirada, SessaoExpiradaError } from './authEvents';
 
 // Fetch autenticado — anexa o JWT salvo no primeiro/último login (ver
 // AuthContext.js). Usado pelas telas que falam direto com o backend em vez
@@ -15,6 +16,14 @@ export async function fetchAutenticado(caminho, options = {}) {
       ...options.headers,
     },
   });
+
+  // 401 — sessão expirada (NC-86): dispara o alerta global + logout forçado,
+  // e devolve um erro marcado pra tela chamadora não empilhar seu próprio
+  // alerta genérico de erro em cima.
+  if (response.status === 401) {
+    sessaoExpirada();
+    throw new SessaoExpiradaError();
+  }
 
   const data = await response.json().catch(() => ({}));
 

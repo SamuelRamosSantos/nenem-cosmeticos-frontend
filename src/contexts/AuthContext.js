@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import database from '../database';
 import { sincronizar, API_URL } from '../services/syncService';
+import { registrarLogoutHandler } from '../services/authEvents';
 import { obterExpiracaoJwt } from '../utils/jwt';
 
 const AuthContext = createContext({
@@ -78,6 +79,14 @@ export function AuthProvider({ children }) {
     setUsuarioLogado(null);
     setIsLoggedIn(false);
   };
+
+  // Registra esse mesmo logout() como o handler global de sessão expirada
+  // (NC-86) — assim qualquer chamada de API 401, mesmo fora de um
+  // componente React (syncService, apiClient), força a volta ao Login sem
+  // duplicar a lógica de limpeza de SecureStore/estado.
+  useEffect(() => {
+    registrarLogoutHandler(logout);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- logout não depende de estado que mude entre renders
 
   return (
     <AuthContext.Provider value={{ isLoggedIn, usuarioLogado, login, logout }}>
