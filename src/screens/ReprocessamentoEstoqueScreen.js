@@ -119,7 +119,7 @@ export default function ReprocessamentoEstoqueScreen() {
     if (!divergencias?.length) return;
     Alert.alert(
       'Confirmar Correção',
-      `${divergencias.length} produto(s) terão o estoque corrigido para o saldo real calculado. Essa ação gera movimentações de ajuste e não pode ser desfeita automaticamente. Continuar?`,
+      `${divergencias.length} produto(s) terão o saldo em estoque corrigido para o valor real calculado. Essa ação não gera movimentação e não pode ser desfeita automaticamente. Continuar?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {

@@ -84,26 +84,21 @@ export async function calcularDivergencias(database, filtros = {}) {
 // =============================================================================
 // aplicarCorrecoes
 //
-// Efetiva as correções calculadas: para cada divergência, grava uma
-// movimentação de ajuste (positivo/negativo) e atualiza qtd_estoque na
-// mesma transação — nenhuma alteração de saldo sem gerar histórico (NC-58).
+// Efetiva as correções calculadas: atualiza produto.qtdEstoque pro saldo
+// real já calculado por calcularDivergencias. NÃO grava movimentação em
+// estoque_movimentacoes (NC-83) — a correção é um ajuste do saldo estático,
+// não uma movimentação de negócio (venda/compra/devolução/ajuste manual).
+// Se gerasse movimentação, ela entraria na soma da PRÓXIMA análise, e o
+// reprocessamento nunca convergiria (cada execução "corrigia" em cima da
+// correção anterior).
 // =============================================================================
 export async function aplicarCorrecoes(database, divergencias) {
   if (!divergencias?.length) return;
 
   await database.write(async () => {
-    const ops = [];
-    for (const { produto, saldoReal, diferenca } of divergencias) {
-      ops.push(
-        database.get('estoque_movimentacoes').prepareCreate(m => {
-          m.produtoId        = produto.id;
-          m.tipoMovimentacao = diferenca > 0 ? 'ajuste_positivo' : 'ajuste_negativo';
-          m.quantidade       = Math.abs(diferenca);
-          m.dataMovimentacao = new Date();
-        })
-      );
-      ops.push(produto.prepareUpdate(p => { p.qtdEstoque = saldoReal; }));
-    }
+    const ops = divergencias.map(({ produto, saldoReal }) =>
+      produto.prepareUpdate(p => { p.qtdEstoque = saldoReal; })
+    );
     await database.batch(...ops);
   });
 }
