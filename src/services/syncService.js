@@ -1,19 +1,23 @@
 import { synchronize } from '@nozbe/watermelondb/sync';
+import * as SecureStore from 'expo-secure-store';
 import { estaConectado } from './networkService';
+import { sessaoExpirada, SessaoExpiradaError } from './authEvents';
 
 // Expo expõe variáveis de ambiente com prefixo EXPO_PUBLIC_
 // Defina EXPO_PUBLIC_API_URL no arquivo .env para sobrescrever o padrão.
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://nenem-cosmeticos.onrender.com/api';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://nenem-cosmeticos.onrender.com/api';
 
 // Mesma lista de tabelas sincronizáveis do backend (TABLE_CONFIG em
 // sync.controller.js). 'coletas'/'coleta_itens' ficam de fora: são locais,
-// nunca sobem pro servidor.
+// nunca sobem pro servidor. 'usuarios' também não sincroniza mais — a
+// autenticação passou a ser sempre em nuvem, sem cópia local (ver AuthContext.js).
 export const TABELAS_SINCRONIZAVEIS = [
-  'usuarios', 'pessoas', 'marcas', 'formas_pagamento',
+  'pessoas', 'marcas', 'formas_pagamento', 'forma_pagamento_taxas',
   'produtos', 'produto_kit_itens',
   'vendas', 'vendas_itens', 'vendas_pagamentos',
   'compras', 'compras_itens', 'compras_pagamentos',
   'estoque_movimentacoes',
+  'titulos', 'titulos_baixas',
 ];
 
 // =============================================================================
@@ -28,7 +32,33 @@ export const TABELAS_SINCRONIZAVEIS = [
 //   - Após finalizar uma venda
 //   - Via botão manual de sincronização na UI
 // =============================================================================
+// 401 — cobre tanto "sem token" quanto "token expirado" em qualquer ponto do
+// sync (pull ou push). Dispara o alerta global de sessão expirada (NC-86) e
+// devolve um erro marcado, pra quem chamar sincronizar() saber que não deve
+// mostrar seu próprio alerta genérico de erro em cima.
+function erroSincronizacao(etapa, response) {
+  if (response.status === 401) {
+    sessaoExpirada();
+    return new SessaoExpiradaError();
+  }
+  return new Error(`Falha no ${etapa} de sincronização: ${response.status} ${response.statusText}`);
+}
+
+// Timestamp da última sincronização (pull+push) bem-sucedida — usado na
+// tela de Configurações (NC-85). Toda chamada de sincronizar() que não
+// lançar erro conta, seja manual ou automática.
+const CHAVE_ULTIMA_SINCRONIZACAO = 'ultimaSincronizacao';
+
+export async function obterUltimaSincronizacao() {
+  const valor = await SecureStore.getItemAsync(CHAVE_ULTIMA_SINCRONIZACAO);
+  return valor ? Number(valor) : null;
+}
+
 export async function sincronizar(database) {
+  // Todas as rotas (incluindo /sync) exigem o JWT do login (ver NC-67/68/69).
+  const token = await SecureStore.getItemAsync('jwt');
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
   await synchronize({
     database,
 
@@ -38,12 +68,12 @@ export async function sincronizar(database) {
         schemaVersion,
       });
 
-      const response = await fetch(`${API_URL}/sync/pull?${params}`);
+      const response = await fetch(`${API_URL}/sync/pull?${params}`, {
+        headers: authHeaders,
+      });
 
       if (!response.ok) {
-        throw new Error(
-          `Falha no pull de sincronização: ${response.status} ${response.statusText}`
-        );
+        throw erroSincronizacao('pull', response);
       }
 
       // Formato esperado: { changes: { tabela: { created, updated, deleted } }, timestamp }
@@ -55,15 +85,13 @@ export async function sincronizar(database) {
         `${API_URL}/sync/push?lastPulledAt=${lastPulledAt ?? 0}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ changes }),
         }
       );
 
       if (!response.ok) {
-        throw new Error(
-          `Falha no push de sincronização: ${response.status} ${response.statusText}`
-        );
+        throw erroSincronizacao('push', response);
       }
     },
 
@@ -71,6 +99,8 @@ export async function sincronizar(database) {
     // estão ativas (usar 1 enquanto não houver migrations implementadas)
     migrationsEnabledAtVersion: 1,
   });
+
+  await SecureStore.setItemAsync(CHAVE_ULTIMA_SINCRONIZACAO, String(Date.now()));
 }
 
 // Lock simples: evita duas sincronizações automáticas concorrentes e também

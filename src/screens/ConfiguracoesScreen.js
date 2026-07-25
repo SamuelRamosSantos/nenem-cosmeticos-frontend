@@ -1,18 +1,26 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import React, { useState } from 'react';
+import Constants from 'expo-constants';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDatabase } from '@nozbe/watermelondb/hooks';
 import { useAuth } from '../contexts/AuthContext';
-import { sincronizar } from '../services/syncService';
+import { sincronizar, obterUltimaSincronizacao } from '../services/syncService';
 import { COLORS, SPACING, FONT, RADIUS, SHADOW } from '../theme';
 
 const DB_NAME = 'watermelon';
+
+const fmtDataHora = (ms) => {
+  const d = new Date(ms);
+  const data = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  const hora = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `${data} às ${hora}`;
+};
 
 // =============================================================================
 // Função Híbrida Universal (Funciona em Desenvolvimento, Dev Client e APK Final)
@@ -92,9 +100,14 @@ async function gerarCopiaDeSeguranca(caminhoOrigem) {
 export default function ConfiguracoesScreen() {
   const navigation = useNavigation();
   const db = useDatabase();
-  const { logout } = useAuth();
+  const { logout, usuarioLogado } = useAuth();
   const [syncing, setSyncing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [ultimaSincronizacao, setUltimaSincronizacao] = useState(null);
+
+  useFocusEffect(useCallback(() => {
+    obterUltimaSincronizacao().then(setUltimaSincronizacao);
+  }, []));
 
   const handleLogout = () => {
     Alert.alert(
@@ -110,9 +123,13 @@ export default function ConfiguracoesScreen() {
     setSyncing(true);
     try {
       await sincronizar(db);
+      setUltimaSincronizacao(Date.now());
       Alert.alert('Sincronização concluída', `Às ${new Date().toLocaleTimeString('pt-BR')}`);
     } catch (err) {
-      Alert.alert('Erro na sincronização', err.message);
+      // Sessão expirada já mostrou seu próprio alerta e força o logout (NC-86).
+      if (!err.sessaoExpirada) {
+        Alert.alert('Erro na sincronização', err.message);
+      }
     } finally {
       setSyncing(false);
     }
@@ -172,6 +189,26 @@ export default function ConfiguracoesScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={[styles.infoCard, SHADOW.sm]}>
+        <View style={styles.infoRow}>
+          <Ionicons name="person-circle-outline" size={18} color={COLORS.primary} />
+          <Text style={styles.infoLabel}>Usuário logado</Text>
+          <Text style={styles.infoValor} numberOfLines={1}>{usuarioLogado ?? '—'}</Text>
+        </View>
+        <View style={[styles.infoRow, styles.infoRowBorder]}>
+          <Ionicons name="sync-outline" size={18} color={COLORS.primary} />
+          <Text style={styles.infoLabel}>Última sincronização</Text>
+          <Text style={styles.infoValor} numberOfLines={1}>
+            {ultimaSincronizacao ? fmtDataHora(ultimaSincronizacao) : 'Nunca'}
+          </Text>
+        </View>
+        <View style={[styles.infoRow, styles.infoRowBorder]}>
+          <Ionicons name="information-circle-outline" size={18} color={COLORS.primary} />
+          <Text style={styles.infoLabel}>Versão do app</Text>
+          <Text style={styles.infoValor}>{Constants.expoConfig?.version ?? '—'}</Text>
+        </View>
+      </View>
+
       {GRUPOS.map(grupo => (
         <View key={grupo.titulo} style={styles.grupo}>
           <Text style={styles.grupoTitulo}>{grupo.titulo}</Text>
@@ -215,6 +252,20 @@ export default function ConfiguracoesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: SPACING.md, paddingBottom: SPACING.xl },
+
+  infoCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.border,
+    marginBottom: SPACING.lg, overflow: 'hidden',
+  },
+  infoRow: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm + 2,
+  },
+  infoRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.divider },
+  infoLabel: { flex: 1, fontSize: FONT.sm, color: COLORS.textSecondary },
+  infoValor: { fontSize: FONT.sm, fontWeight: '700', color: COLORS.text, maxWidth: '45%' },
+
   grupo: { marginBottom: SPACING.lg },
   grupoTitulo: {
     fontSize: FONT.xs, fontWeight: '700', color: COLORS.textSecondary,

@@ -7,16 +7,18 @@ import migrations from './migrations'; // <-- 1. Adicionamos a importação aqui
 import Pessoa from './models/Pessoa';
 import Marca from './models/Marca';
 import FormaPagamento from './models/FormaPagamento';
+import FormaPagamentoTaxa from './models/FormaPagamentoTaxa';
 import Produto from './models/Produto';
 import ProdutoKitItem from './models/ProdutoKitItem';
 import EstoqueMovimentacao from './models/EstoqueMovimentacao';
 import VendaHeader from './models/VendaHeader';
 import VendaItem from './models/VendaItem';
 import VendaPagamento from './models/VendaPagamento';
+import Titulo from './models/Titulo';
+import TituloBaixa from './models/TituloBaixa';
 import CompraHeader from './models/CompraHeader';
 import CompraItem from './models/CompraItem';
 import CompraPagamento from './models/CompraPagamento';
-import Usuario from './models/Usuario';
 import Coleta from './models/Coleta';
 import ColetaItem from './models/ColetaItem';
 
@@ -36,16 +38,18 @@ const database = new Database({
     Pessoa,
     Marca,
     FormaPagamento,
+    FormaPagamentoTaxa,
     Produto,
     ProdutoKitItem,
     EstoqueMovimentacao,
     VendaHeader,
     VendaItem,
     VendaPagamento,
+    Titulo,
+    TituloBaixa,
     CompraHeader,
     CompraItem,
     CompraPagamento,
-    Usuario,
     Coleta,
     ColetaItem,
   ],

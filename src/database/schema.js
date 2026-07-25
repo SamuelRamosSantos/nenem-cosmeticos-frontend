@@ -14,7 +14,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // =============================================================================
 
 export default appSchema({
-  version: 7,
+  version: 14,
   tables: [
 
     // -------------------------------------------------------------------------
@@ -46,6 +46,26 @@ export default appSchema({
       name: 'formas_pagamento',
       columns: [
         { name: 'descricao',  type: 'string' },
+        { name: 'tipo',       type: 'string' }, // 'V' à vista | 'C' cartão | 'P' a prazo
+        // NC-72 — só usados quando tipo = 'P'
+        { name: 'intervalo_dias',          type: 'number', isOptional: true },
+        { name: 'limite_parcelas',         type: 'number', isOptional: true },
+        { name: 'juros_percentual_padrao', type: 'number', isOptional: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ],
+    }),
+
+    // -------------------------------------------------------------------------
+    // NC-71 — taxas de cartão (Débito/Crédito por parcela), só para
+    // formas_pagamento com tipo = 'C'.
+    tableSchema({
+      name: 'forma_pagamento_taxas',
+      columns: [
+        { name: 'forma_pagamento_id', type: 'string', isIndexed: true },
+        { name: 'modalidade',         type: 'string' }, // 'D' débito | 'C' crédito
+        { name: 'parcelas',           type: 'number' },
+        { name: 'taxa_percentual',    type: 'number' },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],
@@ -137,6 +157,43 @@ export default appSchema({
     }),
 
     // -------------------------------------------------------------------------
+    // NC-73/74/75 — Títulos (Contas a Receber), gerados na finalização da venda.
+    tableSchema({
+      name: 'titulos',
+      columns: [
+        { name: 'venda_id',          type: 'string', isIndexed: true },
+        { name: 'cliente_id',        type: 'string', isOptional: true, isIndexed: true },
+        { name: 'parcela_numero',    type: 'number' }, // ex.: 1 em "1/3"
+        { name: 'parcelas_total',    type: 'number' }, // ex.: 3 em "1/3"
+        { name: 'valor_original',    type: 'number' },
+        { name: 'valor_taxa_cartao', type: 'number' },
+        { name: 'valor_liquido',     type: 'number' },
+        { name: 'data_vencimento',   type: 'number' },
+        { name: 'status',           type: 'string' }, // 'Aberto' | 'Baixado' | 'Parcial'
+        { name: 'reclassificado',   type: 'boolean' }, // true se a forma de pagamento foi alterada num estorno
+        { name: 'created_at',        type: 'number' },
+        { name: 'updated_at',        type: 'number' },
+      ],
+    }),
+
+    // -------------------------------------------------------------------------
+    // NC-78 — recebimentos contra um título (só forma tipo 'V' ou 'C').
+    tableSchema({
+      name: 'titulos_baixas',
+      columns: [
+        { name: 'titulo_id',          type: 'string', isIndexed: true },
+        { name: 'forma_pagamento_id', type: 'string', isIndexed: true },
+        { name: 'valor_pago',         type: 'number' },
+        { name: 'valor_desconto',     type: 'number' }, // NC-77
+        { name: 'valor_juros',        type: 'number' }, // NC-77 — juros/mora
+        { name: 'valor_taxa_cartao',  type: 'number' }, // taxa da adquirente nessa baixa (cartão)
+        { name: 'data_baixa',         type: 'number' },
+        { name: 'created_at',         type: 'number' },
+        { name: 'updated_at',         type: 'number' },
+      ],
+    }),
+
+    // -------------------------------------------------------------------------
     tableSchema({
       name: 'compras',
       columns: [
@@ -158,18 +215,6 @@ export default appSchema({
         { name: 'custo_unitario',type: 'number' },
         { name: 'created_at',    type: 'number' },
         { name: 'updated_at',    type: 'number' },
-      ],
-    }),
-
-    // -------------------------------------------------------------------------
-    tableSchema({
-      name: 'usuarios',
-      columns: [
-        { name: 'nome',       type: 'string' },
-        { name: 'senha',      type: 'string' },
-        { name: 'ativo',      type: 'boolean' },
-        { name: 'created_at', type: 'number' },
-        { name: 'updated_at', type: 'number' },
       ],
     }),
 
